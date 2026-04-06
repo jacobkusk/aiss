@@ -15,16 +15,16 @@ export default function VesselPopup({ vessel, onClose }: Props) {
     <div
       className="absolute bottom-6 left-1/2 -translate-x-1/2 z-40 rounded-xl shadow-2xl max-w-md w-[90%]"
       style={{
-        background: "var(--bg-panel)",
+        background: "rgba(255, 255, 255, 0.95)",
         backdropFilter: "blur(20px)",
-        border: "1px solid var(--border)",
+        border: "1px solid rgba(0, 0, 0, 0.1)",
       }}
     >
       {/* Close button */}
       <button
         onClick={onClose}
         className="absolute top-3 right-3 w-6 h-6 flex items-center justify-center rounded-full hover:bg-white/10 transition-colors"
-        style={{ color: "var(--text-muted)" }}
+        style={{ color: "#8899aa" }}
       >
         ✕
       </button>
@@ -42,7 +42,7 @@ export default function VesselPopup({ vessel, onClose }: Props) {
           <div>
             <div className="flex items-center gap-2">
               <span className="text-lg">{mmsiToFlag(vessel.mmsi)}</span>
-              <span className="font-semibold" style={{ color: "var(--text-primary)" }}>
+              <span className="font-semibold" style={{ color: "#1a2a3a" }}>
                 {vessel.ship_name || "Unknown Vessel"}
               </span>
               {isWaveo && (
@@ -54,7 +54,7 @@ export default function VesselPopup({ vessel, onClose }: Props) {
                 </span>
               )}
             </div>
-            <div className="text-xs font-mono" style={{ color: "var(--text-muted)" }}>
+            <div className="text-xs font-mono" style={{ color: "#8899aa" }}>
               MMSI {vessel.mmsi}
               {vessel.destination && <span> · {vessel.destination}</span>}
             </div>
@@ -70,10 +70,10 @@ export default function VesselPopup({ vessel, onClose }: Props) {
             { label: "LON", value: formatCoord(vessel.lon, "lon") },
           ].map((item) => (
             <div key={item.label}>
-              <div className="text-[9px] tracking-wider uppercase" style={{ color: "var(--text-muted)" }}>
+              <div className="text-[9px] tracking-wider uppercase" style={{ color: "#8899aa" }}>
                 {item.label}
               </div>
-              <div className="text-xs font-mono font-medium" style={{ color: "var(--text-secondary)" }}>
+              <div className="text-xs font-mono font-medium" style={{ color: "#3a5a6a" }}>
                 {item.value}
               </div>
             </div>

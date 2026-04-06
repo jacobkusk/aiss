@@ -457,8 +457,8 @@ export default function MapView({
           visibility: "none",
         },
         paint: {
-          "text-color": "#8ba8b8",
-          "text-halo-color": "#020a12",
+          "text-color": "#2a4a5a",
+          "text-halo-color": "#ffffff",
           "text-halo-width": 1,
         },
       });
