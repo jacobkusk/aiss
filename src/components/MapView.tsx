@@ -7,7 +7,24 @@ import { supabase } from "@/lib/supabase";
 import type { Vessel } from "@/lib/types";
 
 export { OVERLAY_LABELS, DEFAULT_OVERLAYS };
-export type { Overlays };
+
+export type Overlays = Record<string, boolean>;
+export type MapStyle = "light" | "dark" | "satellite";
+
+const MAP_TILES: Record<MapStyle, { base: string; labels: string }> = {
+  light: {
+    base: "https://basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}@2x.png",
+    labels: "https://basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}@2x.png",
+  },
+  dark: {
+    base: "https://basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}@2x.png",
+    labels: "https://basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}@2x.png",
+  },
+  satellite: {
+    base: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+    labels: "https://basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}@2x.png",
+  },
+};
 
 interface Props {
   mapRef: MutableRefObject<maplibregl.Map | null>;
@@ -16,6 +33,7 @@ interface Props {
   historicalDate: string | null;
   scrubMinutesAgo: number;
   overlays: Overlays;
+  mapStyle: MapStyle;
   onVesselsUpdate: (vessels: Vessel[]) => void;
   onVesselClick: (vessel: Vessel) => void;
   onRouteCountUpdate: (count: number) => void;
@@ -92,7 +110,6 @@ const OVERLAY_LABELS: Record<string, { label: string; color: string }> = {
   names: { label: "Names", color: "#8ba8b8" },
 };
 
-type Overlays = Record<string, boolean>;
 
 const DEFAULT_OVERLAYS: Overlays = {
   seamarks: false,
@@ -174,6 +191,7 @@ export default function MapView({
   historicalDate,
   scrubMinutesAgo,
   overlays,
+  mapStyle,
   onVesselsUpdate,
   onVesselClick,
   onRouteCountUpdate,
@@ -303,6 +321,18 @@ export default function MapView({
     prevOverlaysRef.current = ov;
   }, [overlays]);
 
+  // Swap map tiles when style changes
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !map.isStyleLoaded()) return;
+    try {
+      const baseSrc = map.getSource("carto-dark") as any;
+      const labelSrc = map.getSource("carto-labels") as any;
+      if (baseSrc) baseSrc.setTiles([MAP_TILES[mapStyle].base]);
+      if (labelSrc) labelSrc.setTiles([MAP_TILES[mapStyle].labels]);
+    } catch { /* not ready */ }
+  }, [mapStyle]);
+
   // Initialize map
   useEffect(() => {
     if (!containerRef.current || initializedRef.current) return;
@@ -316,13 +346,13 @@ export default function MapView({
         sources: {
           "carto-dark": {
             type: "raster",
-            tiles: ["https://basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}@2x.png"],
+            tiles: [MAP_TILES[mapStyle].base],
             tileSize: 256,
             attribution: "&copy; CARTO &copy; OpenStreetMap",
           },
           "carto-labels": {
             type: "raster",
-            tiles: ["https://basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}@2x.png"],
+            tiles: [MAP_TILES[mapStyle].labels],
             tileSize: 256,
           },
         },
@@ -352,6 +382,14 @@ export default function MapView({
 
       const predSrc = map.getSource("predictions") as maplibregl.GeoJSONSource | undefined;
       if (predSrc) predSrc.setData(buildPredictions(geojson));
+    }
+
+    async function fetchTrails() {
+      const { data, error } = await supabase.rpc("get_vessel_trails");
+      if (error || !data) return;
+      const geojson = typeof data === "string" ? JSON.parse(data) : data;
+      const trailSrc = map.getSource("trails") as maplibregl.GeoJSONSource | undefined;
+      if (trailSrc) trailSrc.setData(geojson);
     }
 
     map.on("load", () => {
@@ -427,6 +465,10 @@ export default function MapView({
         type: "geojson",
         data: { type: "FeatureCollection", features: [] },
       });
+      map.addSource("trails", {
+        type: "geojson",
+        data: { type: "FeatureCollection", features: [] },
+      });
       map.addSource("routes", {
         type: "geojson",
         data: { type: "FeatureCollection", features: [] },
@@ -486,7 +528,18 @@ export default function MapView({
         paint: { "text-color": "#ffffff" },
       });
 
-      // Vessel trails
+      // Vessel trails (short blue tails behind moving vessels)
+      map.addLayer({
+        id: "vessel-trails",
+        type: "line",
+        source: "trails",
+        paint: {
+          "line-color": "#6b8aff",
+          "line-width": 1.5,
+          "line-opacity": 0.4,
+        },
+      });
+
       // Ghost track (full route, faded white)
       map.addLayer({
         id: "ghost-track-line",
@@ -691,7 +744,11 @@ export default function MapView({
 
       // Fetch data
       fetchVessels();
-      refreshTimerRef.current = setInterval(fetchVessels, 30_000);
+      fetchTrails();
+      refreshTimerRef.current = setInterval(() => {
+        fetchVessels();
+        fetchTrails();
+      }, 30_000);
     });
 
     return () => {

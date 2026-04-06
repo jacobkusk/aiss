@@ -1,31 +1,28 @@
 "use client";
 
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback } from "react";
 
 interface Props {
-  /** Total range in minutes */
   rangeMinutes: number;
-  /** Called with minutes offset from "now" (negative = past) */
   onScrub: (minutesAgo: number) => void;
-  /** Called when scrubbing ends (returns to live) */
   onLive: () => void;
 }
 
 export default function TimeScrubber({ rangeMinutes, onScrub, onLive }: Props) {
-  const [value, setValue] = useState(rangeMinutes); // far right = now
-  const [isDragging, setIsDragging] = useState(false);
+  const [value, setValue] = useState(rangeMinutes);
   const isLive = value === rangeMinutes;
+  const minutesAgo = rangeMinutes - value;
 
-  const formatTime = (minutesAgo: number) => {
-    if (minutesAgo === 0) return "Now";
-    const h = Math.floor(minutesAgo / 60);
-    const m = minutesAgo % 60;
-    if (h === 0) return `-${m}m`;
-    if (m === 0) return `-${h}h`;
-    return `-${h}h ${m}m`;
+  const formatClock = (minsAgo: number) => {
+    if (minsAgo === 0) return "Now";
+    const d = new Date(Date.now() - minsAgo * 60_000);
+    return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   };
 
-  const minutesAgo = rangeMinutes - value;
+  const startClock = () => {
+    const d = new Date(Date.now() - rangeMinutes * 60_000);
+    return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  };
 
   const handleChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const v = Number(e.target.value);
@@ -45,7 +42,7 @@ export default function TimeScrubber({ rangeMinutes, onScrub, onLive }: Props) {
 
   return (
     <div
-      className="absolute bottom-20 left-1/2 -translate-x-1/2 z-30 flex items-center gap-3 px-4 py-3 rounded-xl"
+      className="absolute bottom-6 left-1/2 -translate-x-1/2 z-30 flex items-center gap-3 px-4 py-3 rounded-xl"
       style={{
         background: "rgba(15, 15, 42, 0.9)",
         backdropFilter: "blur(12px)",
@@ -55,15 +52,13 @@ export default function TimeScrubber({ rangeMinutes, onScrub, onLive }: Props) {
         width: "60%",
       }}
     >
-      <span
-        style={{
-          fontSize: "11px",
-          fontFamily: "var(--font-mono)",
-          color: "rgba(255,255,255,0.4)",
-          whiteSpace: "nowrap",
-        }}
-      >
-        -{Math.floor(rangeMinutes / 60)}h
+      <span style={{
+        fontSize: "11px",
+        fontFamily: "var(--font-mono)",
+        color: "rgba(255,255,255,0.4)",
+        whiteSpace: "nowrap",
+      }}>
+        {startClock()}
       </span>
 
       <input
@@ -73,10 +68,6 @@ export default function TimeScrubber({ rangeMinutes, onScrub, onLive }: Props) {
         step={1}
         value={value}
         onChange={handleChange}
-        onMouseDown={() => setIsDragging(true)}
-        onMouseUp={() => setIsDragging(false)}
-        onTouchStart={() => setIsDragging(true)}
-        onTouchEnd={() => setIsDragging(false)}
         style={{
           flex: 1,
           height: "4px",
@@ -94,16 +85,16 @@ export default function TimeScrubber({ rangeMinutes, onScrub, onLive }: Props) {
           fontSize: "11px",
           fontFamily: "var(--font-mono)",
           fontWeight: 600,
-          color: isLive ? "#00e676" : "rgba(255,255,255,0.5)",
-          background: isLive ? "rgba(0, 230, 118, 0.1)" : "rgba(255,255,255,0.06)",
-          border: isLive ? "1px solid rgba(0, 230, 118, 0.3)" : "1px solid rgba(255,255,255,0.1)",
+          color: isLive ? "#00e676" : "#6b8aff",
+          background: isLive ? "rgba(0, 230, 118, 0.1)" : "rgba(107, 138, 255, 0.1)",
+          border: isLive ? "1px solid rgba(0, 230, 118, 0.3)" : "1px solid rgba(107, 138, 255, 0.3)",
           borderRadius: "4px",
           padding: "2px 8px",
           cursor: "pointer",
           whiteSpace: "nowrap",
         }}
       >
-        {isLive ? "LIVE" : formatTime(minutesAgo)}
+        {isLive ? "LIVE" : formatClock(minutesAgo)}
       </button>
 
       <style jsx>{`

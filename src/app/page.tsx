@@ -265,7 +265,7 @@ export default function LandingPage() {
         }}
       >
         An open protocol by{" "}
-        <span style={{ color: "#6b8aff", fontWeight: 600 }}>WEARE.BLUE</span>
+        <span style={{ color: "#6b8aff", fontWeight: 600 }}>VIER.BLUE</span>
       </footer>
     </div>
   );

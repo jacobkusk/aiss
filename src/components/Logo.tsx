@@ -1,15 +1,17 @@
 export default function Logo() {
   return (
     <div className="px-6 pt-6 pb-4">
-      <div className="text-3xl font-bold tracking-tight">
-        <span style={{ color: "var(--text-primary)" }}>AIS</span>
-        <span style={{ color: "var(--aqua)" }}>s</span>
+      <div style={{ fontFamily: "var(--font-jetbrains), monospace", fontSize: "28px", fontWeight: 700, letterSpacing: "-0.5px" }}>
+        <span style={{ color: "#ffffff" }}>AIS</span>
+        <span style={{ color: "#6b8aff" }}>s</span>
       </div>
-      <div
-        className="text-[10px] tracking-[3px] uppercase mt-1"
-        style={{ color: "var(--text-muted)" }}
-      >
-        Open Maritime Data Protocol
+      <div style={{
+        fontSize: "11px",
+        color: "rgba(255,255,255,0.4)",
+        marginTop: "4px",
+        lineHeight: 1.4,
+      }}>
+        AIS SHARED &amp; OPEN MARITIME DATA PROTOCOL
       </div>
     </div>
   );

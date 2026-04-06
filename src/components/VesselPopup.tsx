@@ -89,7 +89,7 @@ export default function VesselPopup({ vessel, onClose }: Props) {
             className="inline-block mt-3 text-xs font-medium transition-opacity hover:opacity-80"
             style={{ color: "var(--aqua)" }}
           >
-            View on WEARE.BLUE →
+            View on VIER.BLUE →
           </a>
         )}
       </div>
