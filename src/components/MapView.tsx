@@ -552,29 +552,32 @@ export default function MapView({
         top: "44px",
         left: "394px",
         display: "flex",
-        background: "rgba(4, 12, 20, 0.85)",
+        background: "rgba(120, 120, 128, 0.24)",
         backdropFilter: "blur(12px)",
-        border: "1px solid rgba(43, 168, 200, 0.15)",
-        borderRadius: "6px",
-        overflow: "hidden",
+        borderRadius: "7px",
+        padding: "2px",
         zIndex: 10,
       }}>
         <button
           onClick={() => { try { (mapRef.current as any)?.setProjection({ type: "globe" }); } catch {} onToggleGlobe(true); }}
           style={{
-            padding: "5px 14px", fontSize: "11px", fontWeight: 500, border: "none",
-            cursor: "pointer", transition: "all 0.15s",
-            background: isGlobe ? "rgba(43, 168, 200, 0.15)" : "transparent",
-            color: isGlobe ? "#2ba8c8" : "#5a8090",
+            padding: "5px 14px", fontSize: "11px", fontWeight: 600, border: "none",
+            cursor: "pointer", transition: "all 0.2s",
+            borderRadius: "5px",
+            background: isGlobe ? "rgba(255, 255, 255, 0.9)" : "transparent",
+            color: isGlobe ? "#1c1c1e" : "rgba(255, 255, 255, 0.6)",
+            boxShadow: isGlobe ? "0 1px 3px rgba(0,0,0,0.12)" : "none",
           }}
         >Globe</button>
         <button
           onClick={() => { try { (mapRef.current as any)?.setProjection({ type: "mercator" }); } catch {} onToggleGlobe(false); }}
           style={{
-            padding: "5px 14px", fontSize: "11px", fontWeight: 500, border: "none",
-            cursor: "pointer", transition: "all 0.15s",
-            background: !isGlobe ? "rgba(43, 168, 200, 0.15)" : "transparent",
-            color: !isGlobe ? "#2ba8c8" : "#5a8090",
+            padding: "5px 14px", fontSize: "11px", fontWeight: 600, border: "none",
+            cursor: "pointer", transition: "all 0.2s",
+            borderRadius: "5px",
+            background: !isGlobe ? "rgba(255, 255, 255, 0.9)" : "transparent",
+            color: !isGlobe ? "#1c1c1e" : "rgba(255, 255, 255, 0.6)",
+            boxShadow: !isGlobe ? "0 1px 3px rgba(0,0,0,0.12)" : "none",
           }}
         >Map</button>
       </div>
