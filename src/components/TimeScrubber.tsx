@@ -6,12 +6,16 @@ interface Props {
   rangeMinutes: number;
   onScrub: (minutesAgo: number) => void;
   onLive: () => void;
+  zoomLevel?: number;
 }
 
-export default function TimeScrubber({ rangeMinutes, onScrub, onLive }: Props) {
+const AREA_PLAYBACK_MIN_ZOOM = 9;
+
+export default function TimeScrubber({ rangeMinutes, onScrub, onLive, zoomLevel = 2 }: Props) {
   const [value, setValue] = useState(rangeMinutes);
   const isLive = value === rangeMinutes;
   const minutesAgo = rangeMinutes - value;
+  const canAreaPlayback = zoomLevel >= AREA_PLAYBACK_MIN_ZOOM;
 
   const formatClock = (minsAgo: number) => {
     if (minsAgo === 0) return "Now";
@@ -48,7 +52,7 @@ export default function TimeScrubber({ rangeMinutes, onScrub, onLive }: Props) {
         backdropFilter: "blur(12px)",
         border: "1px solid rgba(255,255,255,0.1)",
         minWidth: "360px",
-        maxWidth: "500px",
+        maxWidth: "520px",
         width: "60%",
       }}
     >
@@ -96,6 +100,31 @@ export default function TimeScrubber({ rangeMinutes, onScrub, onLive }: Props) {
       >
         {isLive ? "LIVE" : formatClock(minutesAgo)}
       </button>
+
+      {/* Area playback indicator */}
+      <span style={{
+        fontSize: "8px",
+        fontFamily: "var(--font-mono)",
+        fontWeight: 600,
+        letterSpacing: "0.5px",
+        color: canAreaPlayback ? "rgba(107, 138, 255, 0.6)" : "rgba(255,255,255,0.2)",
+        whiteSpace: "nowrap",
+        borderLeft: "1px solid rgba(255,255,255,0.1)",
+        paddingLeft: "10px",
+        display: "flex",
+        alignItems: "center",
+        gap: "4px",
+        transition: "color 0.3s",
+      }}>
+        <span style={{
+          width: "4px",
+          height: "4px",
+          borderRadius: "50%",
+          background: canAreaPlayback ? "#6b8aff" : "rgba(255,255,255,0.15)",
+          transition: "background 0.3s",
+        }} />
+        {canAreaPlayback ? "AREA" : "AREA"}
+      </span>
 
       <style jsx>{`
         input[type="range"]::-webkit-slider-thumb {

@@ -39,6 +39,7 @@ interface Props {
   onRouteCountUpdate: (count: number) => void;
   onToggleGlobe: (globe: boolean) => void;
   onToggleOverlay: (key: string) => void;
+  onZoomChange?: (zoom: number) => void;
 }
 
 // Predict position based on COG and SOG
@@ -197,16 +198,20 @@ export default function MapView({
   onRouteCountUpdate,
   onToggleGlobe,
   onToggleOverlay,
+  onZoomChange,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const initializedRef = useRef(false);
   const refreshTimerRef = useRef<ReturnType<typeof setInterval>>(undefined);
+  const fetchVesselsRef = useRef<(() => void) | null>(null);
   const trackFeaturesRef = useRef<GeoJSON.Feature[]>([]);
 
   const onVesselsUpdateRef = useRef(onVesselsUpdate);
   const onVesselClickRef = useRef(onVesselClick);
   const onRouteCountUpdateRef = useRef(onRouteCountUpdate);
+  const onZoomChangeRef = useRef(onZoomChange);
   onVesselsUpdateRef.current = onVesselsUpdate;
+  onZoomChangeRef.current = onZoomChange;
   onVesselClickRef.current = onVesselClick;
   onRouteCountUpdateRef.current = onRouteCountUpdate;
 
@@ -297,7 +302,7 @@ export default function MapView({
     }
   }
 
-  // React to scrub changes
+  // React to scrub changes (single vessel track display)
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !map.isStyleLoaded()) return;
@@ -368,28 +373,71 @@ export default function MapView({
 
     mapRef.current = map;
 
+    // Build instant wake trails: short line behind each moving vessel based on course+speed
+    function buildTrailsFromFeatures(features: GeoJSON.Feature[]): GeoJSON.FeatureCollection {
+      const trailFeatures: GeoJSON.Feature[] = [];
+      for (const f of features) {
+        const p = f.properties ?? {};
+        const speed = p.speed ?? 0;
+        if (speed < 0.5) continue;
+        const course = p.course ?? p.heading ?? 0;
+        const [lon, lat] = (f.geometry as GeoJSON.Point).coordinates;
+        // Trail length proportional to speed: ~8 min of travel, capped
+        const nm = Math.min(speed * (8 / 60), 10); // nautical miles, max 10nm
+        const deg = nm / 60; // rough nm to degrees
+        const rad = ((course + 180) % 360) * Math.PI / 180; // reverse direction
+        const dLat = deg * Math.cos(rad);
+        const dLon = deg * Math.sin(rad) / Math.cos(lat * Math.PI / 180);
+        trailFeatures.push({
+          type: "Feature",
+          geometry: { type: "LineString", coordinates: [[lon, lat], [lon + dLon, lat + dLat]] },
+          properties: { mmsi: p.mmsi },
+        });
+      }
+      return { type: "FeatureCollection", features: trailFeatures };
+    }
+
     async function fetchVessels() {
-      const { data, error } = await supabase.rpc("get_live_vessels_geojson");
+      const { data, error } = await supabase.rpc("get_live_vessels_compact");
       if (error || !data) return;
 
-      const geojson = typeof data === "string" ? JSON.parse(data) : data;
+      // Compact format: [[mmsi, lat, lon, speed, course, heading, nav_status, ship_type], ...]
+      // Convert to GeoJSON
+      let geojson: GeoJSON.FeatureCollection;
+      if (Array.isArray(data) && data.length > 0 && Array.isArray(data[0])) {
+        geojson = {
+          type: "FeatureCollection",
+          features: data.map((r: number[]) => ({
+            type: "Feature" as const,
+            geometry: { type: "Point" as const, coordinates: [r[2], r[1]] },
+            properties: {
+              mmsi: r[0], name: "", ship_type: r[7], speed: r[3],
+              course: r[4], heading: r[5], nav_status: r[6],
+              destination: "", source: "aisstream",
+              prev_lat: r[8], prev_lon: r[9],
+            },
+          })),
+        };
+      } else {
+        // GeoJSON from get_vessels_at_time or legacy format
+        geojson = typeof data === "string" ? JSON.parse(data) : data;
+      }
       const features: GeoJSON.Feature[] = geojson?.features ?? [];
 
       onVesselsUpdateRef.current(features.map(vesselFromFeature));
+
+      // Build trails from prev_lat/prev_lon (instant, no accumulation)
+      const trailGeoJSON = buildTrailsFromFeatures(features);
 
       const src = map.getSource("vessels") as maplibregl.GeoJSONSource | undefined;
       if (src) src.setData(geojson);
 
       const predSrc = map.getSource("predictions") as maplibregl.GeoJSONSource | undefined;
       if (predSrc) predSrc.setData(buildPredictions(geojson));
-    }
 
-    async function fetchTrails() {
-      const { data, error } = await supabase.rpc("get_vessel_trails");
-      if (error || !data) return;
-      const geojson = typeof data === "string" ? JSON.parse(data) : data;
+      // Update trails from server-side prev position (instant)
       const trailSrc = map.getSource("trails") as maplibregl.GeoJSONSource | undefined;
-      if (trailSrc) trailSrc.setData(geojson);
+      if (trailSrc) trailSrc.setData(trailGeoJSON);
     }
 
     map.on("load", () => {
@@ -553,16 +601,16 @@ export default function MapView({
         },
       });
 
-      // Selected vessel track (orange, up to scrub point)
+      // Selected vessel track (yellow line with waypoint dots)
       map.addLayer({
         id: "selected-track-line",
         type: "line",
         source: "selected-track",
         filter: ["==", ["geometry-type"], "LineString"],
         paint: {
-          "line-color": "#ff9500",
-          "line-width": 3,
-          "line-opacity": 0.9,
+          "line-color": "#ffd633",
+          "line-width": 2.5,
+          "line-opacity": 0.85,
         },
       });
       map.addLayer({
@@ -571,11 +619,11 @@ export default function MapView({
         source: "selected-track",
         filter: ["==", ["geometry-type"], "Point"],
         paint: {
-          "circle-radius": 4,
-          "circle-color": "#ff9500",
-          "circle-opacity": 0.8,
+          "circle-radius": 3,
+          "circle-color": "#ffd633",
+          "circle-opacity": 0.9,
           "circle-stroke-width": 1,
-          "circle-stroke-color": "#ffffff",
+          "circle-stroke-color": "rgba(0,0,0,0.4)",
         },
       });
 
@@ -677,7 +725,7 @@ export default function MapView({
         layout: { visibility: "none" },
       });
 
-      // Click handlers
+      // Click vessel — show popup + fetch full yellow track with waypoints
       map.on("click", "ais-vessels", async (e) => {
         if (e.features?.[0]) {
           const p = e.features[0].properties;
@@ -696,8 +744,8 @@ export default function MapView({
             source: p.source,
           });
 
-          // Fetch vessel track (last 6 hours)
-          const { data } = await supabase.rpc("get_vessel_track", { p_mmsi: mmsi, p_minutes: 360 });
+          // Fetch vessel track (all available history)
+          const { data } = await supabase.rpc("get_vessel_track", { p_mmsi: mmsi, p_minutes: 2880 });
           if (data) {
             const geojson = typeof data === "string" ? JSON.parse(data) : data;
             trackFeaturesRef.current = geojson.features ?? [];
@@ -742,13 +790,15 @@ export default function MapView({
         map.getCanvas().style.cursor = "";
       });
 
+      // Track zoom level
+      map.on("zoomend", () => {
+        onZoomChangeRef.current?.(Math.round(map.getZoom()));
+      });
+
       // Fetch data
+      fetchVesselsRef.current = fetchVessels;
       fetchVessels();
-      fetchTrails();
-      refreshTimerRef.current = setInterval(() => {
-        fetchVessels();
-        fetchTrails();
-      }, 30_000);
+      refreshTimerRef.current = setInterval(fetchVessels, 30_000);
     });
 
     return () => {

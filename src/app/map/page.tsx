@@ -18,9 +18,10 @@ export default function Home() {
   const [historicalDate, setHistoricalDate] = useState<string | null>(null);
   const [routeCount, setRouteCount] = useState(0);
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [scrubMinutesAgo, setScrubMinutesAgo] = useState(0);
+  // const [scrubMinutesAgo, setScrubMinutesAgo] = useState(0);
   const [overlays, setOverlays] = useState<Overlays>(DEFAULT_OVERLAYS);
   const [mapStyle, setMapStyle] = useState<MapStyle>("light");
+  const [zoomLevel, setZoomLevel] = useState(2);
   const mapRef = useRef<maplibregl.Map | null>(null);
 
   const handleVesselSelect = useCallback((vessel: Vessel) => {
@@ -89,7 +90,7 @@ export default function Home() {
           isGlobe={isGlobe}
           isLive={isLive}
           historicalDate={historicalDate}
-          scrubMinutesAgo={scrubMinutesAgo}
+          scrubMinutesAgo={0}
           overlays={overlays}
           mapStyle={mapStyle}
           onVesselsUpdate={setVessels}
@@ -97,6 +98,7 @@ export default function Home() {
           onRouteCountUpdate={setRouteCount}
           onToggleGlobe={setIsGlobe}
           onToggleOverlay={handleToggleOverlay}
+          onZoomChange={setZoomLevel}
         />
 
         {/* Overlays */}
@@ -117,8 +119,9 @@ export default function Home() {
 
         <TimeScrubber
           rangeMinutes={360}
-          onScrub={setScrubMinutesAgo}
-          onLive={() => setScrubMinutesAgo(0)}
+          onScrub={() => {}}
+          onLive={() => {}}
+          zoomLevel={zoomLevel}
         />
       </div>
     </div>
