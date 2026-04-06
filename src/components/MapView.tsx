@@ -226,13 +226,13 @@ export default function MapView({
         sources: {
           "carto-dark": {
             type: "raster",
-            tiles: ["https://basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}@2x.png"],
+            tiles: ["https://basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}@2x.png"],
             tileSize: 256,
             attribution: "&copy; CARTO &copy; OpenStreetMap",
           },
           "carto-labels": {
             type: "raster",
-            tiles: ["https://basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}@2x.png"],
+            tiles: ["https://basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}@2x.png"],
             tileSize: 256,
           },
         },
@@ -279,11 +279,11 @@ export default function MapView({
       // Dark atmosphere
       try {
         (map as any).setFog({
-          color: "#c8d0d8",
-          "high-color": "#a0aab4",
+          color: "#0d1b2a",
+          "high-color": "#0a1525",
           "horizon-blend": 0.04,
-          "space-color": "#d5dce3",
-          "star-intensity": 0.0,
+          "space-color": "#0f1a24",
+          "star-intensity": 0.15,
         });
       } catch {}
 
@@ -532,7 +532,7 @@ export default function MapView({
       <div
         ref={containerRef}
         className="w-full h-full"
-        style={{ background: "#d5dce3" }}
+        style={{ background: "var(--bg-deep)" }}
       />
 
       {/* Overlay Toggle Panel */}
