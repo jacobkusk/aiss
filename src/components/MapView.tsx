@@ -315,6 +315,51 @@ export default function MapView({
         tileSize: 256,
       });
 
+      // Generate vessel icons (triangles for underway, circles for anchored)
+      const iconColors: Record<string, string> = {
+        cargo: "#4a8f4a",
+        tanker: "#c44040",
+        passenger: "#4a90d9",
+        fishing: "#d4a017",
+        sailing: "#2ba8c8",
+        special: "#e07020",
+        unknown: "#6b8fa3",
+      };
+      for (const [name, color] of Object.entries(iconColors)) {
+        // Triangle (underway)
+        const triSize = 24;
+        const triCanvas = document.createElement("canvas");
+        triCanvas.width = triSize;
+        triCanvas.height = triSize;
+        const triCtx = triCanvas.getContext("2d")!;
+        triCtx.fillStyle = color;
+        triCtx.beginPath();
+        triCtx.moveTo(triSize / 2, 2);
+        triCtx.lineTo(triSize - 3, triSize - 2);
+        triCtx.lineTo(3, triSize - 2);
+        triCtx.closePath();
+        triCtx.fill();
+        triCtx.strokeStyle = "rgba(0,0,0,0.3)";
+        triCtx.lineWidth = 1;
+        triCtx.stroke();
+        map.addImage(`tri-${name}`, { width: triSize, height: triSize, data: triCtx.getImageData(0, 0, triSize, triSize).data });
+
+        // Circle (anchored)
+        const circSize = 16;
+        const circCanvas = document.createElement("canvas");
+        circCanvas.width = circSize;
+        circCanvas.height = circSize;
+        const circCtx = circCanvas.getContext("2d")!;
+        circCtx.fillStyle = color;
+        circCtx.beginPath();
+        circCtx.arc(circSize / 2, circSize / 2, circSize / 2 - 1, 0, Math.PI * 2);
+        circCtx.fill();
+        circCtx.strokeStyle = "rgba(0,0,0,0.3)";
+        circCtx.lineWidth = 1;
+        circCtx.stroke();
+        map.addImage(`circ-${name}`, { width: circSize, height: circSize, data: circCtx.getImageData(0, 0, circSize, circSize).data });
+      }
+
       // Layers — ordered bottom to top
 
       // OpenSeaMap (default OFF)
@@ -362,34 +407,48 @@ export default function MapView({
         layout: { visibility: "visible" },
       });
 
-      // Vessel dots
+      // Vessel icons (MarineTraffic style)
+      const st = ["to-number", ["get", "ship_type"], 0];
+      const isUnderway = [">", ["to-number", ["get", "speed"], 0], 0.5];
+      const shipCategory = [
+        "case",
+        ["all", [">=", st, 70], ["<", st, 80]], "cargo",
+        ["all", [">=", st, 80], ["<", st, 90]], "tanker",
+        ["all", [">=", st, 60], ["<", st, 70]], "passenger",
+        ["all", [">=", st, 30], ["<", st, 36]], "fishing",
+        ["any", ["==", st, 36], ["==", st, 37]], "sailing",
+        ["all", [">=", st, 40], ["<", st, 60]], "special",
+        "unknown",
+      ];
       map.addLayer({
         id: "ais-vessels",
-        type: "circle",
+        type: "symbol",
         source: "vessels",
         filter: buildVesselFilter(DEFAULT_OVERLAYS),
-        paint: {
-          "circle-radius": ["interpolate", ["linear"], ["zoom"], 2, 1.5, 8, 3, 14, 6],
-          "circle-color": [
+        layout: {
+          "icon-image": [
             "case",
-            // Underway vessels (speed > 0.5) get green
-            [">", ["to-number", ["get", "speed"], 0], 0.5], "#00c853",
-            // Anchored/stopped: color by ship_type
-            ["all", [">=", ["to-number", ["get", "ship_type"], 0], 70], ["<", ["to-number", ["get", "ship_type"], 0], 80]], "#4a8f4a",
-            ["all", [">=", ["to-number", ["get", "ship_type"], 0], 80], ["<", ["to-number", ["get", "ship_type"], 0], 90]], "#c44040",
-            ["all", [">=", ["to-number", ["get", "ship_type"], 0], 60], ["<", ["to-number", ["get", "ship_type"], 0], 70]], "#4a90d9",
-            ["all", [">=", ["to-number", ["get", "ship_type"], 0], 30], ["<", ["to-number", ["get", "ship_type"], 0], 40]], "#d4a017",
-            ["==", ["to-number", ["get", "ship_type"], 0], 36], "#2ba8c8",
-            ["==", ["to-number", ["get", "ship_type"], 0], 37], "#2ba8c8",
-            "#6b8fa3",
+            isUnderway, ["concat", "tri-", shipCategory],
+            ["concat", "circ-", shipCategory],
           ] as any,
-          "circle-opacity": [
+          "icon-size": ["interpolate", ["linear"], ["zoom"], 2, 0.4, 8, 0.7, 14, 1],
+          "icon-rotate": [
             "case",
-            [">", ["to-number", ["get", "speed"], 0], 0.5], 0.95,
-            0.4,
+            isUnderway, ["to-number", ["get", "heading"], 0],
+            0,
+          ] as any,
+          "icon-rotation-alignment": "map",
+          "icon-allow-overlap": true,
+          "icon-ignore-placement": true,
+        },
+        paint: {
+          "icon-opacity": [
+            "case",
+            isUnderway, 0.95,
+            0.5,
           ] as any,
         },
-      });
+      } as any);
 
       // Vessel labels (default OFF)
       map.addLayer({
