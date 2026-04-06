@@ -292,23 +292,25 @@ export default function MapView({
       // Generate vessel icons via canvas (sync)
       const iconColors: Record<string, string> = {
         cargo: "#4a8f4a", tanker: "#c44040", passenger: "#4a90d9",
-        fishing: "#d4a017", sailing: "#2ba8c8", special: "#e07020", unknown: "#6b8fa3",
+        fishing: "#d4a017", sailing: "#2ba8c8", special: "#e07020", unknown: "#3a7ca5",
       };
-      const makeTriangle = (color: string, size: number): ImageData => {
+      // Sharp arrow shape like MarineTraffic — narrow, pointy
+      const makeArrow = (color: string, w: number, h: number): ImageData => {
         const c = document.createElement("canvas");
-        c.width = size; c.height = size;
+        c.width = w; c.height = h;
         const ctx = c.getContext("2d")!;
         ctx.fillStyle = color;
         ctx.beginPath();
-        ctx.moveTo(size / 2, 1);
-        ctx.lineTo(size - 2, size - 1);
-        ctx.lineTo(2, size - 1);
+        ctx.moveTo(w / 2, 0);           // tip
+        ctx.lineTo(w - 1, h);           // bottom right
+        ctx.lineTo(w / 2, h * 0.7);     // notch center
+        ctx.lineTo(1, h);               // bottom left
         ctx.closePath();
         ctx.fill();
-        ctx.strokeStyle = "rgba(0,0,0,0.4)";
-        ctx.lineWidth = 1;
+        ctx.strokeStyle = "rgba(255,255,255,0.5)";
+        ctx.lineWidth = 0.5;
         ctx.stroke();
-        return ctx.getImageData(0, 0, size, size);
+        return ctx.getImageData(0, 0, w, h);
       };
       const makeCircle = (color: string, size: number): ImageData => {
         const c = document.createElement("canvas");
@@ -318,16 +320,16 @@ export default function MapView({
         ctx.beginPath();
         ctx.arc(size / 2, size / 2, size / 2 - 1, 0, Math.PI * 2);
         ctx.fill();
-        ctx.strokeStyle = "rgba(0,0,0,0.3)";
-        ctx.lineWidth = 1;
+        ctx.strokeStyle = "rgba(255,255,255,0.3)";
+        ctx.lineWidth = 0.5;
         ctx.stroke();
         return ctx.getImageData(0, 0, size, size);
       };
       for (const [name, color] of Object.entries(iconColors)) {
-        const tri = makeTriangle(color, 24);
-        map.addImage(`tri-${name}`, { width: 24, height: 24, data: new Uint8Array(tri.data.buffer) });
-        const circ = makeCircle(color, 16);
-        map.addImage(`circ-${name}`, { width: 16, height: 16, data: new Uint8Array(circ.data.buffer) });
+        const arrow = makeArrow(color, 12, 20);
+        map.addImage(`tri-${name}`, { width: 12, height: 20, data: new Uint8Array(arrow.data.buffer) });
+        const circ = makeCircle(color, 10);
+        map.addImage(`circ-${name}`, { width: 10, height: 10, data: new Uint8Array(circ.data.buffer) });
       }
 
       // Sources
