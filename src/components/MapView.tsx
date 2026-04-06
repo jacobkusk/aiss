@@ -560,7 +560,7 @@ export default function MapView({
         zIndex: 10,
       }}>
         <button
-          onClick={() => { try { (mapRef.current as any)?.setProjection({ type: "globe" }); } catch {} onToggleGlobe(true); }}
+          onClick={() => { try { (mapRef.current as any)?.setProjection({ type: "globe" }); mapRef.current?.flyTo({ zoom: 2, duration: 1500 }); } catch {} onToggleGlobe(true); }}
           style={{
             padding: "5px 14px", fontSize: "11px", fontWeight: 600, border: "none",
             cursor: "pointer", transition: "all 0.2s",
