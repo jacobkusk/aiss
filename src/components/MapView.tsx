@@ -73,18 +73,18 @@ function vesselFromFeature(f: GeoJSON.Feature): Vessel {
 }
 
 // Overlay config
-const OVERLAY_LABELS: Record<string, string> = {
-  seamarks: "⚓ Sea Marks",
-  underway: "🚢 Underway",
-  anchored: "⚓ At Anchor",
-  predictions: "➡️ Predictions",
-  trails: "〰️ Trails",
-  cargo: "📦 Cargo",
-  tanker: "🛢️ Tanker",
-  passenger: "⛴️ Passenger",
-  fishing: "🎣 Fishing",
-  sailing: "⛵ Sailing",
-  names: "Aa Names",
+const OVERLAY_LABELS: Record<string, { label: string; color: string }> = {
+  seamarks: { label: "Sea Marks", color: "#5a8090" },
+  underway: { label: "Underway", color: "#00e676" },
+  anchored: { label: "At Anchor", color: "#5a8090" },
+  predictions: { label: "Predictions", color: "#ffffff" },
+  trails: { label: "Trails", color: "#2ba8c8" },
+  cargo: { label: "Cargo", color: "#4a8f4a" },
+  tanker: { label: "Tanker", color: "#c44040" },
+  passenger: { label: "Passenger", color: "#4a90d9" },
+  fishing: { label: "Fishing", color: "#d4a017" },
+  sailing: { label: "Sailing", color: "#2ba8c8" },
+  names: { label: "Names", color: "#8ba8b8" },
 };
 
 type Overlays = Record<string, boolean>;
@@ -596,7 +596,7 @@ export default function MapView({
           zIndex: 10,
         }}
       >
-        {Object.entries(OVERLAY_LABELS).map(([key, label]) => (
+        {Object.entries(OVERLAY_LABELS).map(([key, item]) => (
           <button
             key={key}
             onClick={() => toggleOverlay(key)}
@@ -611,9 +611,20 @@ export default function MapView({
               textAlign: "left",
               whiteSpace: "nowrap",
               transition: "all 0.15s",
+              display: "flex",
+              alignItems: "center",
             }}
           >
-            {label}
+            <span style={{
+              display: "inline-block",
+              width: "8px",
+              height: "8px",
+              borderRadius: "50%",
+              backgroundColor: item.color,
+              marginRight: "8px",
+              opacity: overlays[key] ? 1 : 0.3,
+            }} />
+            {item.label}
           </button>
         ))}
       </div>
