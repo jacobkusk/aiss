@@ -589,48 +589,94 @@ export default function MapView({
           position: "absolute",
           top: "60px",
           right: "12px",
-          background: "rgba(30, 30, 34, 0.75)",
-          backdropFilter: "blur(12px)",
-          borderRadius: "8px",
-          padding: "3px",
-          display: "flex",
-          flexDirection: "column",
-          gap: "2px",
+          background: "rgba(15, 25, 40, 0.85)",
+          backdropFilter: "blur(16px)",
+          borderRadius: "10px",
+          border: "1px solid rgba(255, 255, 255, 0.08)",
+          padding: "16px 20px",
+          display: "grid",
+          gridTemplateColumns: "1fr 1fr",
+          gap: "0 24px",
           zIndex: 10,
+          minWidth: "280px",
         }}
       >
-        {Object.entries(OVERLAY_LABELS).map(([key, item]) => (
-          <button
-            key={key}
-            onClick={() => toggleOverlay(key)}
-            style={{
-              background: overlays[key] ? "rgba(255, 255, 255, 0.9)" : "transparent",
-              border: "none",
-              color: overlays[key] ? "#1c1c1e" : "rgba(255, 255, 255, 0.6)",
-              fontSize: "12px",
-              padding: "6px 12px",
-              borderRadius: "5px",
-              boxShadow: overlays[key] ? "0 1px 3px rgba(0,0,0,0.12)" : "none",
-              cursor: "pointer",
-              textAlign: "left",
-              whiteSpace: "nowrap",
-              transition: "all 0.15s",
-              display: "flex",
-              alignItems: "center",
-            }}
-          >
-            <span style={{
-              display: "inline-block",
-              width: "8px",
-              height: "8px",
-              borderRadius: "50%",
-              backgroundColor: item.color,
-              marginRight: "8px",
-              opacity: overlays[key] ? 1 : 0.3,
-            }} />
-            {item.label}
-          </button>
-        ))}
+        {/* Left column: Layers */}
+        <div>
+          <div style={{ fontSize: "10px", fontWeight: 600, letterSpacing: "1.5px", color: "rgba(255,255,255,0.35)", marginBottom: "10px", textTransform: "uppercase" }}>Layers</div>
+          {(["underway", "anchored", "cargo", "tanker", "passenger", "fishing", "sailing"] as const).map((key) => {
+            const item = OVERLAY_LABELS[key];
+            return (
+              <button
+                key={key}
+                onClick={() => toggleOverlay(key)}
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  color: overlays[key] ? "#ffffff" : "rgba(255, 255, 255, 0.35)",
+                  fontSize: "12px",
+                  padding: "5px 0",
+                  cursor: "pointer",
+                  textAlign: "left",
+                  whiteSpace: "nowrap",
+                  transition: "all 0.15s",
+                  display: "flex",
+                  alignItems: "center",
+                  width: "100%",
+                }}
+              >
+                <span style={{
+                  display: "inline-block",
+                  width: "8px",
+                  height: "8px",
+                  borderRadius: "50%",
+                  backgroundColor: overlays[key] ? item.color : "rgba(255,255,255,0.2)",
+                  marginRight: "10px",
+                  transition: "all 0.15s",
+                }} />
+                {item.label}
+              </button>
+            );
+          })}
+        </div>
+        {/* Right column: Overlays */}
+        <div>
+          <div style={{ fontSize: "10px", fontWeight: 600, letterSpacing: "1.5px", color: "rgba(255,255,255,0.35)", marginBottom: "10px", textTransform: "uppercase" }}>Overlays</div>
+          {(["seamarks", "trails", "predictions", "names"] as const).map((key) => {
+            const item = OVERLAY_LABELS[key];
+            return (
+              <button
+                key={key}
+                onClick={() => toggleOverlay(key)}
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  color: overlays[key] ? "#ffffff" : "rgba(255, 255, 255, 0.35)",
+                  fontSize: "12px",
+                  padding: "5px 0",
+                  cursor: "pointer",
+                  textAlign: "left",
+                  whiteSpace: "nowrap",
+                  transition: "all 0.15s",
+                  display: "flex",
+                  alignItems: "center",
+                  width: "100%",
+                }}
+              >
+                <span style={{
+                  display: "inline-block",
+                  width: "8px",
+                  height: "8px",
+                  borderRadius: "50%",
+                  backgroundColor: overlays[key] ? item.color : "rgba(255,255,255,0.2)",
+                  marginRight: "10px",
+                  transition: "all 0.15s",
+                }} />
+                {item.label}
+              </button>
+            );
+          })}
+        </div>
       </div>
     </div>
   );
