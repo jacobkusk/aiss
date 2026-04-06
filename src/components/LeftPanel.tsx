@@ -4,18 +4,17 @@ import Logo from "./Logo";
 import StatsBar from "./StatsBar";
 import SearchInput from "./SearchInput";
 import TimeMachine from "./TimeMachine";
-import VesselList from "./VesselList";
-import type { Vessel } from "@/lib/types";
+import { OVERLAY_LABELS, type Overlays } from "./MapView";
 
 interface Props {
-  vessels: Vessel[];
-  onVesselSelect: (vessel: Vessel) => void;
   onTimeMachineChange: (daysAgo: number) => void;
   isLive: boolean;
+  overlays: Overlays;
+  onToggleOverlay: (key: string) => void;
   onClose: () => void;
 }
 
-export default function LeftPanel({ vessels, onVesselSelect, onTimeMachineChange, isLive, onClose }: Props) {
+export default function LeftPanel({ onTimeMachineChange, isLive, overlays, onToggleOverlay, onClose }: Props) {
   return (
     <div
       className="flex flex-col w-[380px] shrink-0 h-full max-md:hidden"
@@ -42,10 +41,57 @@ export default function LeftPanel({ vessels, onVesselSelect, onTimeMachineChange
       </div>
 
       <StatsBar />
-      <SearchInput onSelect={onVesselSelect} />
+      <SearchInput onSelect={() => {}} />
       <TimeMachine onChange={onTimeMachineChange} isLive={isLive} />
-      <VesselList vessels={vessels} onSelect={onVesselSelect} />
 
+      {/* Filters */}
+      <div style={{
+        padding: "16px 24px",
+        borderTop: "1px solid rgba(255,255,255,0.08)",
+        display: "flex",
+        flexDirection: "column",
+        gap: "2px",
+      }}>
+        <div style={{
+          fontSize: "10px",
+          fontWeight: 600,
+          letterSpacing: "1px",
+          color: "rgba(255,255,255,0.3)",
+          marginBottom: "8px",
+          textTransform: "uppercase",
+        }}>
+          Filters
+        </div>
+        {Object.entries(OVERLAY_LABELS).map(([key, item]) => (
+          <button
+            key={key}
+            onClick={() => onToggleOverlay(key)}
+            style={{
+              background: "transparent",
+              border: "none",
+              color: overlays[key] ? "#ffffff" : "rgba(255, 255, 255, 0.3)",
+              fontSize: "13px",
+              padding: "6px 0",
+              cursor: "pointer",
+              textAlign: "left",
+              transition: "all 0.15s",
+              display: "flex",
+              alignItems: "center",
+            }}
+          >
+            <span style={{
+              display: "inline-block",
+              width: "8px",
+              height: "8px",
+              borderRadius: "50%",
+              backgroundColor: overlays[key] ? item.color : "rgba(255,255,255,0.15)",
+              marginRight: "12px",
+              transition: "all 0.15s",
+            }} />
+            {item.label}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }

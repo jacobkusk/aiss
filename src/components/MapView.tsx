@@ -1,10 +1,13 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback, MutableRefObject } from "react";
+import { useEffect, useRef, MutableRefObject } from "react";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { supabase } from "@/lib/supabase";
 import type { Vessel } from "@/lib/types";
+
+export { OVERLAY_LABELS, DEFAULT_OVERLAYS };
+export type { Overlays };
 
 interface Props {
   mapRef: MutableRefObject<maplibregl.Map | null>;
@@ -12,10 +15,12 @@ interface Props {
   isLive: boolean;
   historicalDate: string | null;
   scrubMinutesAgo: number;
+  overlays: Overlays;
   onVesselsUpdate: (vessels: Vessel[]) => void;
   onVesselClick: (vessel: Vessel) => void;
   onRouteCountUpdate: (count: number) => void;
   onToggleGlobe: (globe: boolean) => void;
+  onToggleOverlay: (key: string) => void;
 }
 
 // Predict position based on COG and SOG
@@ -168,16 +173,17 @@ export default function MapView({
   isLive,
   historicalDate,
   scrubMinutesAgo,
+  overlays,
   onVesselsUpdate,
   onVesselClick,
   onRouteCountUpdate,
   onToggleGlobe,
+  onToggleOverlay,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const initializedRef = useRef(false);
   const refreshTimerRef = useRef<ReturnType<typeof setInterval>>(undefined);
   const trackFeaturesRef = useRef<GeoJSON.Feature[]>([]);
-  const [overlays, setOverlays] = useState<Overlays>(DEFAULT_OVERLAYS);
 
   const onVesselsUpdateRef = useRef(onVesselsUpdate);
   const onVesselClickRef = useRef(onVesselClick);
@@ -244,12 +250,25 @@ export default function MapView({
     // Scrub position marker (ship at scrub time)
     if (scrubPosSrc && cutoff && filtered.length > 0) {
       const lastPoint = filtered[filtered.length - 1] as any;
+      // Calculate bearing from previous point to current (actual movement direction)
+      let bearing = lastPoint.properties?.heading ?? 0;
+      if (filtered.length >= 2) {
+        const prev = filtered[filtered.length - 2] as any;
+        const [lon1, lat1] = prev.geometry.coordinates;
+        const [lon2, lat2] = lastPoint.geometry.coordinates;
+        const dLon = (lon2 - lon1) * Math.PI / 180;
+        const lat1r = lat1 * Math.PI / 180;
+        const lat2r = lat2 * Math.PI / 180;
+        const y = Math.sin(dLon) * Math.cos(lat2r);
+        const x = Math.cos(lat1r) * Math.sin(lat2r) - Math.sin(lat1r) * Math.cos(lat2r) * Math.cos(dLon);
+        bearing = (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+      }
       scrubPosSrc.setData({
         type: "FeatureCollection",
         features: [{
           type: "Feature",
           properties: {
-            heading: lastPoint.properties?.heading ?? 0,
+            heading: bearing,
             speed: lastPoint.properties?.speed ?? 0,
           },
           geometry: lastPoint.geometry,
@@ -267,32 +286,22 @@ export default function MapView({
     updateTrackDisplay(map);
   }, [scrubMinutesAgo]);
 
-  const toggleOverlay = useCallback((key: string) => {
-    setOverlays((prev) => {
-      const next = { ...prev, [key]: !prev[key] };
-      const map = mapRef.current;
-      if (!map || !map.isStyleLoaded()) return next;
-
-      try {
-        if (key === "seamarks") {
-          map.setLayoutProperty("openseamap", "visibility", next.seamarks ? "visible" : "none");
-        }
-        if (key === "predictions") {
-          map.setLayoutProperty("vessel-predictions", "visibility", next.predictions ? "visible" : "none");
-        }
-        if (key === "names") {
-          map.setLayoutProperty("vessel-labels", "visibility", next.names ? "visible" : "none");
-        }
-        if (["cargo", "tanker", "passenger", "fishing", "sailing", "underway", "anchored"].includes(key)) {
-          map.setFilter("ais-vessels", buildVesselFilter(next));
-        }
-      } catch {
-        // Layer not ready
-      }
-
-      return next;
-    });
-  }, [mapRef]);
+  // Sync overlay state to map layers
+  const prevOverlaysRef = useRef(overlays);
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !map.isStyleLoaded()) return;
+    const ov = overlays;
+    try {
+      map.setLayoutProperty("openseamap", "visibility", ov.seamarks ? "visible" : "none");
+      map.setLayoutProperty("vessel-predictions", "visibility", ov.predictions ? "visible" : "none");
+      map.setLayoutProperty("vessel-labels", "visibility", ov.names ? "visible" : "none");
+      map.setFilter("ais-vessels", buildVesselFilter(ov));
+    } catch {
+      // Layers not ready
+    }
+    prevOverlaysRef.current = ov;
+  }, [overlays]);
 
   // Initialize map
   useEffect(() => {
@@ -402,6 +411,9 @@ export default function MapView({
         const circ = makeCircle(color, 10);
         map.addImage(`circ-${name}`, { width: 10, height: 10, data: new Uint8Array(circ.data.buffer) });
       }
+      // Orange scrub marker icon
+      const scrubArrow = makeArrow("#ff9500", 16, 26);
+      map.addImage("tri-scrub", { width: 16, height: 26, data: new Uint8Array(scrubArrow.data.buffer) });
 
       // Sources
       map.addSource("vessels", {
@@ -520,7 +532,7 @@ export default function MapView({
         type: "symbol",
         source: "scrub-position",
         layout: {
-          "icon-image": "tri-unknown",
+          "icon-image": "tri-scrub",
           "icon-size": 1.2,
           "icon-rotate": ["to-number", ["get", "heading"], 0],
           "icon-rotation-alignment": "map",
@@ -782,54 +794,6 @@ export default function MapView({
         >Map</button>
       </div>
 
-      {/* Overlay Toggle Panel */}
-      <div
-        style={{
-          position: "absolute",
-          top: "60px",
-          right: "12px",
-          background: "rgba(15, 25, 40, 0.85)",
-          backdropFilter: "blur(16px)",
-          borderRadius: "10px",
-          border: "1px solid rgba(255, 255, 255, 0.08)",
-          padding: "12px 16px",
-          display: "flex",
-          flexDirection: "column",
-          gap: "1px",
-          zIndex: 10,
-        }}
-      >
-        {Object.entries(OVERLAY_LABELS).map(([key, item]) => (
-          <button
-            key={key}
-            onClick={() => toggleOverlay(key)}
-            style={{
-              background: "transparent",
-              border: "none",
-              color: overlays[key] ? "#ffffff" : "rgba(255, 255, 255, 0.35)",
-              fontSize: "12px",
-              padding: "5px 0",
-              cursor: "pointer",
-              textAlign: "left",
-              whiteSpace: "nowrap",
-              transition: "all 0.15s",
-              display: "flex",
-              alignItems: "center",
-            }}
-          >
-            <span style={{
-              display: "inline-block",
-              width: "8px",
-              height: "8px",
-              borderRadius: "50%",
-              backgroundColor: overlays[key] ? item.color : "rgba(255,255,255,0.2)",
-              marginRight: "10px",
-              transition: "all 0.15s",
-            }} />
-            {item.label}
-          </button>
-        ))}
-      </div>
     </div>
   );
 }

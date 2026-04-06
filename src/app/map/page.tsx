@@ -3,7 +3,7 @@
 import { useState, useCallback, useRef } from "react";
 import type maplibregl from "maplibre-gl";
 import LeftPanel from "@/components/LeftPanel";
-import MapView from "@/components/MapView";
+import MapView, { DEFAULT_OVERLAYS, type Overlays } from "@/components/MapView";
 import TimeScrubber from "@/components/TimeScrubber";
 
 import LiveHistoricalBadge from "@/components/LiveHistoricalBadge";
@@ -19,6 +19,7 @@ export default function Home() {
   const [routeCount, setRouteCount] = useState(0);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [scrubMinutesAgo, setScrubMinutesAgo] = useState(0);
+  const [overlays, setOverlays] = useState<Overlays>(DEFAULT_OVERLAYS);
   const mapRef = useRef<maplibregl.Map | null>(null);
 
   const handleVesselSelect = useCallback((vessel: Vessel) => {
@@ -44,15 +45,19 @@ export default function Home() {
     }
   }, []);
 
+  const handleToggleOverlay = useCallback((key: string) => {
+    setOverlays((prev) => ({ ...prev, [key]: !prev[key] }));
+  }, []);
+
   return (
     <div className="flex h-full w-full overflow-hidden">
       {/* Left Panel */}
       {sidebarOpen && (
         <LeftPanel
-          vessels={vessels}
-          onVesselSelect={handleVesselSelect}
           onTimeMachineChange={handleTimeMachineChange}
           isLive={isLive}
+          overlays={overlays}
+          onToggleOverlay={handleToggleOverlay}
           onClose={() => setSidebarOpen(false)}
         />
       )}
@@ -82,10 +87,12 @@ export default function Home() {
           isLive={isLive}
           historicalDate={historicalDate}
           scrubMinutesAgo={scrubMinutesAgo}
+          overlays={overlays}
           onVesselsUpdate={setVessels}
           onVesselClick={setSelectedVessel}
           onRouteCountUpdate={setRouteCount}
           onToggleGlobe={setIsGlobe}
+          onToggleOverlay={handleToggleOverlay}
         />
 
         {/* Overlays */}
