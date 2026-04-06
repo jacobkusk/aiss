@@ -409,17 +409,8 @@ export default function MapView({
 
       // Vessel icons (MarineTraffic style)
       const st = ["to-number", ["get", "ship_type"], 0];
-      const isUnderway = [">", ["to-number", ["get", "speed"], 0], 0.5];
-      const shipCategory = [
-        "case",
-        ["all", [">=", st, 70], ["<", st, 80]], "cargo",
-        ["all", [">=", st, 80], ["<", st, 90]], "tanker",
-        ["all", [">=", st, 60], ["<", st, 70]], "passenger",
-        ["all", [">=", st, 30], ["<", st, 36]], "fishing",
-        ["any", ["==", st, 36], ["==", st, 37]], "sailing",
-        ["all", [">=", st, 40], ["<", st, 60]], "special",
-        "unknown",
-      ];
+      const spd = ["to-number", ["get", "speed"], 0];
+      const uw = [">", spd, 0.5]; // underway
       map.addLayer({
         id: "ais-vessels",
         type: "symbol",
@@ -428,13 +419,27 @@ export default function MapView({
         layout: {
           "icon-image": [
             "case",
-            isUnderway, ["concat", "tri-", shipCategory],
-            ["concat", "circ-", shipCategory],
+            // Underway → triangles by type
+            ["all", uw, ["all", [">=", st, 70], ["<", st, 80]]], "tri-cargo",
+            ["all", uw, ["all", [">=", st, 80], ["<", st, 90]]], "tri-tanker",
+            ["all", uw, ["all", [">=", st, 60], ["<", st, 70]]], "tri-passenger",
+            ["all", uw, ["all", [">=", st, 30], ["<", st, 36]]], "tri-fishing",
+            ["all", uw, ["any", ["==", st, 36], ["==", st, 37]]], "tri-sailing",
+            ["all", uw, ["all", [">=", st, 40], ["<", st, 60]]], "tri-special",
+            uw, "tri-unknown",
+            // Anchored → circles by type
+            ["all", [">=", st, 70], ["<", st, 80]], "circ-cargo",
+            ["all", [">=", st, 80], ["<", st, 90]], "circ-tanker",
+            ["all", [">=", st, 60], ["<", st, 70]], "circ-passenger",
+            ["all", [">=", st, 30], ["<", st, 36]], "circ-fishing",
+            ["any", ["==", st, 36], ["==", st, 37]], "circ-sailing",
+            ["all", [">=", st, 40], ["<", st, 60]], "circ-special",
+            "circ-unknown",
           ] as any,
-          "icon-size": ["interpolate", ["linear"], ["zoom"], 2, 0.4, 8, 0.7, 14, 1],
+          "icon-size": ["interpolate", ["linear"], ["zoom"], 2, 0.4, 8, 0.7, 14, 1] as any,
           "icon-rotate": [
             "case",
-            isUnderway, ["to-number", ["get", "heading"], 0],
+            uw, ["to-number", ["get", "heading"], 0],
             0,
           ] as any,
           "icon-rotation-alignment": "map",
@@ -444,7 +449,7 @@ export default function MapView({
         paint: {
           "icon-opacity": [
             "case",
-            isUnderway, 0.95,
+            uw, 0.95,
             0.5,
           ] as any,
         },
