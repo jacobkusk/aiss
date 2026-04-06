@@ -373,28 +373,13 @@ export default function MapView({
 
     mapRef.current = map;
 
-    // Build instant wake trails: short line behind each moving vessel based on course+speed
-    function buildTrailsFromFeatures(features: GeoJSON.Feature[]): GeoJSON.FeatureCollection {
-      const trailFeatures: GeoJSON.Feature[] = [];
-      for (const f of features) {
-        const p = f.properties ?? {};
-        const speed = p.speed ?? 0;
-        if (speed < 0.5) continue;
-        const course = p.course ?? p.heading ?? 0;
-        const [lon, lat] = (f.geometry as GeoJSON.Point).coordinates;
-        // Trail length proportional to speed: ~8 min of travel, capped
-        const nm = Math.min(speed * (8 / 60), 10); // nautical miles, max 10nm
-        const deg = nm / 60; // rough nm to degrees
-        const rad = ((course + 180) % 360) * Math.PI / 180; // reverse direction
-        const dLat = deg * Math.cos(rad);
-        const dLon = deg * Math.sin(rad) / Math.cos(lat * Math.PI / 180);
-        trailFeatures.push({
-          type: "Feature",
-          geometry: { type: "LineString", coordinates: [[lon, lat], [lon + dLon, lat + dLat]] },
-          properties: { mmsi: p.mmsi },
-        });
-      }
-      return { type: "FeatureCollection", features: trailFeatures };
+    // Blue trails: fetched from ais_positions (last few waypoints per moving vessel)
+    async function fetchTrails() {
+      const { data, error } = await supabase.rpc("get_short_trails");
+      if (error || !data) return;
+      const geojson = typeof data === "string" ? JSON.parse(data) : data;
+      const trailSrc = map.getSource("trails") as maplibregl.GeoJSONSource | undefined;
+      if (trailSrc) trailSrc.setData(geojson);
     }
 
     async function fetchVessels() {
@@ -426,18 +411,12 @@ export default function MapView({
 
       onVesselsUpdateRef.current(features.map(vesselFromFeature));
 
-      // Build trails from prev_lat/prev_lon (instant, no accumulation)
-      const trailGeoJSON = buildTrailsFromFeatures(features);
-
       const src = map.getSource("vessels") as maplibregl.GeoJSONSource | undefined;
       if (src) src.setData(geojson);
 
       const predSrc = map.getSource("predictions") as maplibregl.GeoJSONSource | undefined;
       if (predSrc) predSrc.setData(buildPredictions(geojson));
 
-      // Update trails from server-side prev position (instant)
-      const trailSrc = map.getSource("trails") as maplibregl.GeoJSONSource | undefined;
-      if (trailSrc) trailSrc.setData(trailGeoJSON);
     }
 
     map.on("load", () => {
@@ -798,7 +777,11 @@ export default function MapView({
       // Fetch data
       fetchVesselsRef.current = fetchVessels;
       fetchVessels();
-      refreshTimerRef.current = setInterval(fetchVessels, 30_000);
+      fetchTrails();
+      refreshTimerRef.current = setInterval(() => {
+        fetchVessels();
+        fetchTrails();
+      }, 30_000);
     });
 
     return () => {
