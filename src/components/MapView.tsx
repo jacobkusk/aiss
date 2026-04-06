@@ -11,6 +11,7 @@ interface Props {
   isGlobe: boolean;
   isLive: boolean;
   historicalDate: string | null;
+  scrubMinutesAgo: number;
   onVesselsUpdate: (vessels: Vessel[]) => void;
   onVesselClick: (vessel: Vessel) => void;
   onRouteCountUpdate: (count: number) => void;
@@ -78,7 +79,6 @@ const OVERLAY_LABELS: Record<string, { label: string; color: string }> = {
   underway: { label: "Underway", color: "#00e676" },
   anchored: { label: "At Anchor", color: "#5a8090" },
   predictions: { label: "Predictions", color: "#ffffff" },
-  trails: { label: "Trails", color: "#2ba8c8" },
   cargo: { label: "Cargo", color: "#4a8f4a" },
   tanker: { label: "Tanker", color: "#c44040" },
   passenger: { label: "Passenger", color: "#4a90d9" },
@@ -93,8 +93,7 @@ const DEFAULT_OVERLAYS: Overlays = {
   seamarks: false,
   underway: true,
   anchored: true,
-  predictions: true,
-  trails: true,
+  predictions: false,
   cargo: true,
   tanker: true,
   passenger: true,
@@ -168,6 +167,7 @@ export default function MapView({
   isGlobe,
   isLive,
   historicalDate,
+  scrubMinutesAgo,
   onVesselsUpdate,
   onVesselClick,
   onRouteCountUpdate,
@@ -176,7 +176,7 @@ export default function MapView({
   const containerRef = useRef<HTMLDivElement>(null);
   const initializedRef = useRef(false);
   const refreshTimerRef = useRef<ReturnType<typeof setInterval>>(undefined);
-  const trailTimerRef = useRef<ReturnType<typeof setInterval>>(undefined);
+  const trackFeaturesRef = useRef<GeoJSON.Feature[]>([]);
   const [overlays, setOverlays] = useState<Overlays>(DEFAULT_OVERLAYS);
 
   const onVesselsUpdateRef = useRef(onVesselsUpdate);
@@ -185,6 +185,87 @@ export default function MapView({
   onVesselsUpdateRef.current = onVesselsUpdate;
   onVesselClickRef.current = onVesselClick;
   onRouteCountUpdateRef.current = onRouteCountUpdate;
+
+  // Helper: update track display based on scrub position
+  const scrubRef = useRef(scrubMinutesAgo);
+  scrubRef.current = scrubMinutesAgo;
+
+  function updateTrackDisplay(map: maplibregl.Map) {
+    const features = trackFeaturesRef.current;
+    const trackSrc = map.getSource("selected-track") as maplibregl.GeoJSONSource | undefined;
+    const ghostSrc = map.getSource("ghost-track") as maplibregl.GeoJSONSource | undefined;
+    const scrubPosSrc = map.getSource("scrub-position") as maplibregl.GeoJSONSource | undefined;
+    if (!trackSrc) return;
+
+    const empty: GeoJSON.FeatureCollection = { type: "FeatureCollection", features: [] };
+    if (features.length === 0) {
+      trackSrc.setData(empty);
+      if (ghostSrc) ghostSrc.setData(empty);
+      if (scrubPosSrc) scrubPosSrc.setData(empty);
+      return;
+    }
+
+    const allPoints: [number, number][] = features.map((f: any) => f.geometry.coordinates);
+
+    // Ghost line = full track (always visible)
+    if (ghostSrc && allPoints.length >= 2) {
+      ghostSrc.setData({
+        type: "FeatureCollection",
+        features: [{ type: "Feature", properties: {}, geometry: { type: "LineString", coordinates: allPoints } }],
+      });
+    }
+
+    // Filter by scrub time
+    const cutoff = scrubRef.current > 0
+      ? new Date(Date.now() - scrubRef.current * 60_000).toISOString()
+      : null;
+
+    const filtered = cutoff
+      ? features.filter((f: any) => f.properties?.recorded_at && f.properties.recorded_at <= cutoff)
+      : features;
+
+    const points: [number, number][] = filtered.map((f: any) => f.geometry.coordinates);
+
+    // Orange line = track up to scrub point
+    if (points.length >= 2) {
+      trackSrc.setData({
+        type: "FeatureCollection",
+        features: [
+          { type: "Feature", properties: {}, geometry: { type: "LineString", coordinates: points } },
+          ...filtered,
+        ],
+      });
+    } else if (points.length === 1) {
+      trackSrc.setData({ type: "FeatureCollection", features: filtered });
+    } else {
+      trackSrc.setData(empty);
+    }
+
+    // Scrub position marker (ship at scrub time)
+    if (scrubPosSrc && cutoff && filtered.length > 0) {
+      const lastPoint = filtered[filtered.length - 1] as any;
+      scrubPosSrc.setData({
+        type: "FeatureCollection",
+        features: [{
+          type: "Feature",
+          properties: {
+            heading: lastPoint.properties?.heading ?? 0,
+            speed: lastPoint.properties?.speed ?? 0,
+          },
+          geometry: lastPoint.geometry,
+        }],
+      });
+    } else if (scrubPosSrc) {
+      scrubPosSrc.setData(empty);
+    }
+  }
+
+  // React to scrub changes
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !map.isStyleLoaded()) return;
+    updateTrackDisplay(map);
+  }, [scrubMinutesAgo]);
 
   const toggleOverlay = useCallback((key: string) => {
     setOverlays((prev) => {
@@ -198,9 +279,6 @@ export default function MapView({
         }
         if (key === "predictions") {
           map.setLayoutProperty("vessel-predictions", "visibility", next.predictions ? "visible" : "none");
-        }
-        if (key === "trails") {
-          map.setLayoutProperty("vessel-trails", "visibility", next.trails ? "visible" : "none");
         }
         if (key === "names") {
           map.setLayoutProperty("vessel-labels", "visibility", next.names ? "visible" : "none");
@@ -222,6 +300,7 @@ export default function MapView({
     initializedRef.current = true;
 
     const map = new maplibregl.Map({
+      attributionControl: false,
       container: containerRef.current,
       style: {
         version: 8,
@@ -249,14 +328,6 @@ export default function MapView({
     } as maplibregl.MapOptions);
 
     mapRef.current = map;
-
-    async function fetchTrails() {
-      const { data, error } = await supabase.rpc("get_vessel_trails");
-      if (error || !data) return;
-      const geojson = typeof data === "string" ? JSON.parse(data) : data;
-      const src = map.getSource("trails") as maplibregl.GeoJSONSource | undefined;
-      if (src) src.setData(geojson);
-    }
 
     async function fetchVessels() {
       const { data, error } = await supabase.rpc("get_live_vessels_geojson");
@@ -292,7 +363,7 @@ export default function MapView({
       // Generate vessel icons via canvas (sync)
       const iconColors: Record<string, string> = {
         cargo: "#4a8f4a", tanker: "#c44040", passenger: "#4a90d9",
-        fishing: "#d4a017", sailing: "#2ba8c8", special: "#e07020", unknown: "#3a7ca5",
+        fishing: "#d4a017", sailing: "#2ba8c8", special: "#e07020", unknown: "#4a8f4a",
       };
       // Sharp arrow shape like MarineTraffic — narrow, pointy
       const makeArrow = (color: string, w: number, h: number): ImageData => {
@@ -340,15 +411,23 @@ export default function MapView({
         clusterMaxZoom: 5,
         clusterRadius: 50,
       });
-      map.addSource("trails", {
-        type: "geojson",
-        data: { type: "FeatureCollection", features: [] },
-      });
       map.addSource("predictions", {
         type: "geojson",
         data: { type: "FeatureCollection", features: [] },
       });
       map.addSource("routes", {
+        type: "geojson",
+        data: { type: "FeatureCollection", features: [] },
+      });
+      map.addSource("ghost-track", {
+        type: "geojson",
+        data: { type: "FeatureCollection", features: [] },
+      });
+      map.addSource("selected-track", {
+        type: "geojson",
+        data: { type: "FeatureCollection", features: [] },
+      });
+      map.addSource("scrub-position", {
         type: "geojson",
         data: { type: "FeatureCollection", features: [] },
       });
@@ -396,13 +475,60 @@ export default function MapView({
       });
 
       // Vessel trails
+      // Ghost track (full route, faded white)
       map.addLayer({
-        id: "vessel-trails",
+        id: "ghost-track-line",
         type: "line",
-        source: "trails",
-        minzoom: 4,
-        paint: { "line-color": "#2ba8c8", "line-width": 1, "line-opacity": 0.3 },
-        layout: { visibility: "visible" },
+        source: "ghost-track",
+        paint: {
+          "line-color": "#ffffff",
+          "line-width": 1.5,
+          "line-opacity": 0.2,
+          "line-dasharray": [2, 4],
+        },
+      });
+
+      // Selected vessel track (orange, up to scrub point)
+      map.addLayer({
+        id: "selected-track-line",
+        type: "line",
+        source: "selected-track",
+        filter: ["==", ["geometry-type"], "LineString"],
+        paint: {
+          "line-color": "#ff9500",
+          "line-width": 3,
+          "line-opacity": 0.9,
+        },
+      });
+      map.addLayer({
+        id: "selected-track-dots",
+        type: "circle",
+        source: "selected-track",
+        filter: ["==", ["geometry-type"], "Point"],
+        paint: {
+          "circle-radius": 4,
+          "circle-color": "#ff9500",
+          "circle-opacity": 0.8,
+          "circle-stroke-width": 1,
+          "circle-stroke-color": "#ffffff",
+        },
+      });
+
+      // Scrub position marker (ship icon at scrub time)
+      map.addLayer({
+        id: "scrub-position",
+        type: "symbol",
+        source: "scrub-position",
+        layout: {
+          "icon-image": "tri-unknown",
+          "icon-size": 1.2,
+          "icon-rotate": ["to-number", ["get", "heading"], 0],
+          "icon-rotation-alignment": "map",
+          "icon-allow-overlap": true,
+        } as any,
+        paint: {
+          "icon-opacity": 1,
+        },
       });
 
       // Vessel icons (MarineTraffic style)
@@ -487,11 +613,12 @@ export default function MapView({
       });
 
       // Click handlers
-      map.on("click", "ais-vessels", (e) => {
+      map.on("click", "ais-vessels", async (e) => {
         if (e.features?.[0]) {
           const p = e.features[0].properties;
+          const mmsi = p.mmsi;
           onVesselClickRef.current({
-            mmsi: p.mmsi,
+            mmsi,
             ship_name: p.name ?? p.ship_name,
             lat: (e.features[0].geometry as GeoJSON.Point).coordinates[1],
             lon: (e.features[0].geometry as GeoJSON.Point).coordinates[0],
@@ -503,6 +630,30 @@ export default function MapView({
             destination: p.destination,
             source: p.source,
           });
+
+          // Fetch vessel track (last 6 hours)
+          const { data } = await supabase.rpc("get_vessel_track", { p_mmsi: mmsi, p_minutes: 360 });
+          if (data) {
+            const geojson = typeof data === "string" ? JSON.parse(data) : data;
+            trackFeaturesRef.current = geojson.features ?? [];
+            updateTrackDisplay(map);
+          }
+        }
+      });
+
+      // Click on empty map — clear selection
+      map.on("click", (e) => {
+        const vessels = map.queryRenderedFeatures(e.point, { layers: ["ais-vessels", "clusters"] });
+        if (!vessels.length) {
+          // Clear all track layers
+          trackFeaturesRef.current = [];
+          const empty: GeoJSON.FeatureCollection = { type: "FeatureCollection", features: [] };
+          const trackSrc = map.getSource("selected-track") as maplibregl.GeoJSONSource | undefined;
+          const ghostSrc = map.getSource("ghost-track") as maplibregl.GeoJSONSource | undefined;
+          const scrubPosSrc = map.getSource("scrub-position") as maplibregl.GeoJSONSource | undefined;
+          if (trackSrc) trackSrc.setData(empty);
+          if (ghostSrc) ghostSrc.setData(empty);
+          if (scrubPosSrc) scrubPosSrc.setData(empty);
         }
       });
 
@@ -519,30 +670,20 @@ export default function MapView({
       // Hover
       map.on("mouseenter", "clusters", () => { map.getCanvas().style.cursor = "pointer"; });
       map.on("mouseleave", "clusters", () => { map.getCanvas().style.cursor = ""; });
-      map.on("mouseenter", "ais-vessels", (e) => {
+      map.on("mouseenter", "ais-vessels", () => {
         map.getCanvas().style.cursor = "pointer";
-        if (e.features?.[0]) {
-          const mmsi = e.features[0].properties.mmsi;
-          map.setPaintProperty("vessel-trails", "line-opacity", ["case", ["==", ["get", "mmsi"], mmsi], 0.8, 0.15]);
-          map.setPaintProperty("vessel-trails", "line-width", ["case", ["==", ["get", "mmsi"], mmsi], 2, 1]);
-        }
       });
       map.on("mouseleave", "ais-vessels", () => {
         map.getCanvas().style.cursor = "";
-        map.setPaintProperty("vessel-trails", "line-opacity", 0.3);
-        map.setPaintProperty("vessel-trails", "line-width", 1);
       });
 
       // Fetch data
       fetchVessels();
-      fetchTrails();
       refreshTimerRef.current = setInterval(fetchVessels, 30_000);
-      trailTimerRef.current = setInterval(fetchTrails, 5 * 60_000);
     });
 
     return () => {
       if (refreshTimerRef.current) clearInterval(refreshTimerRef.current);
-      if (trailTimerRef.current) clearInterval(trailTimerRef.current);
       map.remove();
       initializedRef.current = false;
     };
@@ -561,7 +702,7 @@ export default function MapView({
     const map = mapRef.current;
     if (!map || !map.isStyleLoaded()) return;
 
-    const liveLayerIds = ["ais-vessels", "clusters", "cluster-count", "vessel-trails", "vessel-predictions", "vessel-labels"];
+    const liveLayerIds = ["ais-vessels", "clusters", "cluster-count", "vessel-predictions", "vessel-labels"];
 
     if (isLive) {
       try {

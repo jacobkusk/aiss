@@ -13,7 +13,7 @@ export default function VesselPopup({ vessel, onClose }: Props) {
 
   return (
     <div
-      className="absolute bottom-6 left-1/2 -translate-x-1/2 z-40 rounded-xl shadow-2xl max-w-md w-[90%]"
+      className="absolute top-4 left-1/2 -translate-x-1/2 z-40 rounded-xl shadow-2xl max-w-md w-[90%]"
       style={{
         background: "rgba(255, 255, 255, 0.95)",
         backdropFilter: "blur(20px)",
