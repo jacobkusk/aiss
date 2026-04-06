@@ -19,7 +19,7 @@ export default function LeftPanel({ vessels, onVesselSelect, onTimeMachineChange
     <div
       className="flex flex-col w-[380px] shrink-0 h-full max-md:hidden"
       style={{
-        background: "#d5dce3",
+        background: "#ffffff",
         backdropFilter: "blur(20px)",
         borderRight: "1px solid var(--border)",
       }}
