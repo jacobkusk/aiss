@@ -312,11 +312,28 @@ export default function MapView({
     }
   }
 
-  // React to scrub changes (single vessel track display)
+  // React to scrub changes — update track display AND vessel positions
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !map.isStyleLoaded()) return;
     updateTrackDisplay(map);
+
+    if (scrubMinutesAgo <= 0) {
+      // Back to live — resume normal fetch
+      if (fetchVesselsRef.current) fetchVesselsRef.current();
+      return;
+    }
+
+    // Fetch historical vessel positions at scrub time
+    (async () => {
+      const { data, error } = await supabase.rpc("get_vessels_at_time", { p_minutes_ago: scrubMinutesAgo });
+      if (error || !data) return;
+      const geojson: GeoJSON.FeatureCollection = typeof data === "string" ? JSON.parse(data) : data;
+      const src = map.getSource("vessels") as maplibregl.GeoJSONSource | undefined;
+      if (src) src.setData(geojson);
+      const predSrc = map.getSource("predictions") as maplibregl.GeoJSONSource | undefined;
+      if (predSrc) predSrc.setData({ type: "FeatureCollection", features: [] });
+    })();
   }, [scrubMinutesAgo]);
 
   // Sync overlay state to map layers
