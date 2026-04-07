@@ -57,7 +57,7 @@ export default async function LandingPage() {
           AISs protocol
         </h1>
         <p style={{ fontSize: "22px", fontWeight: 400, color: "rgba(255,255,255,0.75)", margin: "0 0 16px", lineHeight: 1.4 }}>
-          The open standard<span style={{ fontFamily: "monospace", color: "#6b8aff", fontWeight: 600, margin: "0 0.3em" }}>.aiss</span>for maritime data.
+          The open standard<span style={{ fontFamily: "monospace", color: "#6b8aff", fontWeight: 600, margin: "0 0.3em" }}>.aiss</span>for maritime data
         </p>
         <p style={{ fontSize: "17px", color: "rgba(255,255,255,0.45)", margin: "0 0 44px", lineHeight: 1.7 }}>
           Every vessel · Every voyage · Every signal<br />
