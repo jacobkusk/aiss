@@ -54,14 +54,14 @@ export default async function LandingPage() {
         </div>
 
         <h1 style={{ fontSize: "56px", fontWeight: 700, lineHeight: 1.05, margin: "0 0 20px", letterSpacing: "-1.5px" }}>
-          The ocean's memory
+          AISs protocol
         </h1>
         <p style={{ fontSize: "22px", fontWeight: 400, color: "rgba(255,255,255,0.75)", margin: "0 0 16px", lineHeight: 1.4 }}>
           Open standard protocol<span style={{ fontFamily: "monospace", color: "#6b8aff", fontWeight: 600, margin: "0 0.3em" }}>.aiss</span>for maritime data
         </p>
         <p style={{ fontSize: "17px", color: "rgba(255,255,255,0.45)", margin: "0 0 44px", lineHeight: 1.7 }}>
           Every vessel · Every voyage · Every signal<br />
-          Signed · Verified · Permanent
+          Collected · Saved · Shared
         </p>
 
         <div style={{ display: "flex", gap: "16px", justifyContent: "center", flexWrap: "wrap" }}>
