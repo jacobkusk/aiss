@@ -1,21 +1,18 @@
 "use client";
 
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback } from "react";
 
 interface Props {
   onScrub: (minutesAgo: number) => void;
   onLive: () => void;
-  onDateSelect?: (daysAgo: number) => void;
-  historicalDate?: string | null;
 }
 
 const COARSE_RANGE = 2880; // 2 dage
 const FINE_RANGE   = 120;  // 2 timer
 
-export default function DualScrubber({ onScrub, onLive, onDateSelect, historicalDate }: Props) {
+export default function DualScrubber({ onScrub, onLive }: Props) {
   const [coarseAgo, setCoarseAgo] = useState(0);
   const [fineAgo, setFineAgo] = useState(0);
-  const dateInputRef = useRef<HTMLInputElement>(null);
 
   const isLive = coarseAgo === 0 && fineAgo === 0;
 
@@ -31,12 +28,12 @@ export default function DualScrubber({ onScrub, onLive, onDateSelect, historical
   const handleCoarse = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const ago = COARSE_RANGE - Number(e.target.value);
     setCoarseAgo(ago);
-    setFineAgo(0); // nulstil fin slider når grov flyttes
+    setFineAgo(0);
     if (ago <= 0) onLive(); else onScrub(ago);
   }, [onScrub, onLive]);
 
   const handleFine = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const offset = Number(e.target.value); // -60 til +60
+    const offset = Number(e.target.value);
     const total = Math.max(0, coarseAgo + offset);
     setFineAgo(offset);
     if (total <= 0) onLive(); else onScrub(total);
@@ -46,38 +43,25 @@ export default function DualScrubber({ onScrub, onLive, onDateSelect, historical
     setCoarseAgo(0);
     setFineAgo(0);
     onLive();
-    if (onDateSelect) onDateSelect(0);
   };
-
-  const handleDateChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!e.target.value || !onDateSelect) return;
-    const selected = new Date(e.target.value);
-    const now = new Date();
-    const daysAgo = Math.round((now.getTime() - selected.getTime()) / 86_400_000);
-    onDateSelect(Math.max(0, daysAgo));
-  }, [onDateSelect]);
 
   const coarsePct = ((COARSE_RANGE - coarseAgo) / COARSE_RANGE) * 100;
   const finePct   = ((fineAgo + FINE_RANGE / 2) / FINE_RANGE) * 100;
   const totalAgo  = Math.max(0, coarseAgo + fineAgo);
 
   return (
-    <div
-      style={{
-        background: "rgba(15, 15, 42, 0.9)",
-        backdropFilter: "blur(12px)",
-        border: "1px solid rgba(255,255,255,0.1)",
-        borderRadius: "12px",
-        padding: "10px 14px",
-        minWidth: "320px",
-        maxWidth: "460px",
-        width: "50%",
-        display: "flex",
-        flexDirection: "column",
-        gap: "10px",
-      }}
-    >
-      {/* Fin slider — 2 timer */}
+    <div style={{
+      background: "rgba(15, 15, 42, 0.9)",
+      backdropFilter: "blur(12px)",
+      border: "1px solid rgba(255,255,255,0.1)",
+      borderRadius: "12px",
+      padding: "10px 16px",
+      width: "100%",
+      display: "flex",
+      flexDirection: "column",
+      gap: "10px",
+    }}>
+      {/* Fine slider — 2 timer */}
       <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
         <span style={labelStyle}>−2t</span>
         <input
@@ -95,7 +79,7 @@ export default function DualScrubber({ onScrub, onLive, onDateSelect, historical
         </span>
       </div>
 
-      {/* Grov slider — 2 dage */}
+      {/* Coarse slider — 2 dage */}
       <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
         <span style={labelStyle}>2d</span>
         <input
@@ -121,37 +105,6 @@ export default function DualScrubber({ onScrub, onLive, onDateSelect, historical
         }}>
           {isLive ? "LIVE" : formatClock(totalAgo)}
         </button>
-
-        {/* Date picker */}
-        <div style={{ position: "relative" }}>
-          <button
-            onClick={() => dateInputRef.current?.showPicker()}
-            style={{
-              fontSize: "11px",
-              fontFamily: "var(--font-mono)",
-              fontWeight: 600,
-              color: historicalDate ? "#6b8aff" : "rgba(255,255,255,0.3)",
-              background: historicalDate ? "rgba(107,138,255,0.1)" : "transparent",
-              border: historicalDate ? "1px solid rgba(107,138,255,0.3)" : "1px solid rgba(255,255,255,0.1)",
-              borderRadius: "4px",
-              padding: "2px 8px",
-              cursor: "pointer",
-              whiteSpace: "nowrap",
-            }}
-          >
-            {historicalDate
-              ? new Date(historicalDate).toLocaleDateString([], { day: "numeric", month: "short" })
-              : "dato"}
-          </button>
-          <input
-            ref={dateInputRef}
-            type="date"
-            max={new Date().toISOString().split("T")[0]}
-            value={historicalDate ?? ""}
-            onChange={handleDateChange}
-            style={{ position: "absolute", opacity: 0, pointerEvents: "none", width: 0, height: 0 }}
-          />
-        </div>
       </div>
 
       <style jsx>{`

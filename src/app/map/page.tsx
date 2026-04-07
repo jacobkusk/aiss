@@ -117,13 +117,56 @@ export default function Home() {
           />
         )}
 
-        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-30 flex flex-col items-center gap-2">
-          <DualScrubber
-            onScrub={setScrubMinutesAgo}
-            onLive={() => setScrubMinutesAgo(0)}
-            onDateSelect={handleTimeMachineChange}
-            historicalDate={historicalDate}
-          />
+        <div style={{
+          position: "absolute", bottom: 24, left: "50%", transform: "translateX(-50%)",
+          zIndex: 30, display: "flex", alignItems: "stretch", gap: "8px",
+          width: "min(860px, calc(100vw - 48px))",
+        }}>
+          <div style={{ flex: 1 }}>
+            <DualScrubber
+              onScrub={setScrubMinutesAgo}
+              onLive={() => { setScrubMinutesAgo(0); setIsLive(true); setHistoricalDate(null); }}
+            />
+          </div>
+
+          {/* Date box */}
+          <div style={{
+            background: "rgba(15, 15, 42, 0.9)",
+            backdropFilter: "blur(12px)",
+            border: historicalDate ? "1px solid rgba(107,138,255,0.4)" : "1px solid rgba(255,255,255,0.1)",
+            borderRadius: "12px",
+            padding: "10px 14px",
+            display: "flex",
+            flexDirection: "column",
+            justifyContent: "center",
+            gap: "4px",
+            minWidth: "100px",
+          }}>
+            <span style={{ fontSize: "9px", fontFamily: "var(--font-mono)", color: "rgba(255,255,255,0.3)", letterSpacing: "0.08em" }}>DATO</span>
+            <input
+              type="date"
+              max={new Date().toISOString().split("T")[0]}
+              value={historicalDate ?? ""}
+              onChange={(e) => {
+                if (!e.target.value) { setIsLive(true); setHistoricalDate(null); return; }
+                const selected = new Date(e.target.value);
+                const daysAgo = Math.round((Date.now() - selected.getTime()) / 86_400_000);
+                handleTimeMachineChange(Math.max(0, daysAgo));
+              }}
+              style={{
+                background: "transparent",
+                border: "none",
+                outline: "none",
+                color: historicalDate ? "#6b8aff" : "rgba(255,255,255,0.4)",
+                fontSize: "11px",
+                fontFamily: "var(--font-mono)",
+                fontWeight: 600,
+                cursor: "pointer",
+                padding: 0,
+                width: "100%",
+              }}
+            />
+          </div>
         </div>
       </div>
     </div>
