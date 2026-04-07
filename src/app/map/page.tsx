@@ -4,8 +4,7 @@ import { useState, useCallback, useRef } from "react";
 import type maplibregl from "maplibre-gl";
 import LeftPanel from "@/components/LeftPanel";
 import MapView, { DEFAULT_OVERLAYS, type Overlays, type MapStyle } from "@/components/MapView";
-import TimeScrubber from "@/components/TimeScrubber";
-import TimePlayer from "@/components/TimePlayer";
+import DualScrubber from "@/components/DualScrubber";
 
 import LiveHistoricalBadge from "@/components/LiveHistoricalBadge";
 import VesselPopup from "@/components/VesselPopup";
@@ -118,22 +117,12 @@ export default function Home() {
           />
         )}
 
-        {/* TimePlayer — over slideren */}
-        <div className="absolute bottom-20 left-1/2 -translate-x-1/2 z-30">
-          <TimePlayer
-            rangeMinutes={2880}
+        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-30">
+          <DualScrubber
             onScrub={setScrubMinutesAgo}
             onLive={() => setScrubMinutesAgo(0)}
           />
         </div>
-
-        {/* TimeScrubber — bunden */}
-        <TimeScrubber
-          rangeMinutes={2880}
-          onScrub={setScrubMinutesAgo}
-          onLive={() => setScrubMinutesAgo(0)}
-          zoomLevel={zoomLevel}
-        />
       </div>
     </div>
   );
