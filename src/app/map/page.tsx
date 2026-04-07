@@ -5,6 +5,7 @@ import type maplibregl from "maplibre-gl";
 import LeftPanel from "@/components/LeftPanel";
 import MapView, { DEFAULT_OVERLAYS, type Overlays, type MapStyle } from "@/components/MapView";
 import DualScrubber from "@/components/DualScrubber";
+import ZoomTimeline from "@/components/ZoomTimeline";
 
 import LiveHistoricalBadge from "@/components/LiveHistoricalBadge";
 import VesselPopup from "@/components/VesselPopup";
@@ -117,7 +118,11 @@ export default function Home() {
           />
         )}
 
-        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-30">
+        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-30 flex flex-col items-center gap-2">
+          <ZoomTimeline
+            onScrub={setScrubMinutesAgo}
+            onLive={() => setScrubMinutesAgo(0)}
+          />
           <DualScrubber
             onScrub={setScrubMinutesAgo}
             onLive={() => setScrubMinutesAgo(0)}
