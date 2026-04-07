@@ -60,8 +60,8 @@ export default async function LandingPage() {
           The open standard<span style={{ fontFamily: "monospace", color: "#6b8aff", fontWeight: 600, margin: "0 0.3em" }}>.aiss</span>for maritime data
         </p>
         <p style={{ fontSize: "17px", color: "rgba(255,255,255,0.45)", margin: "0 0 44px", lineHeight: 1.7 }}>
-          EVERY VESSEL · EVERY VOYAGE · EVERY SIGNAL<br />
-          COLLECTED · SAVED · SHARED
+          Every vessel · Every voyage · Every signal<br />
+          Collected · Saved · Shared
         </p>
 
         <div style={{ display: "flex", gap: "16px", justifyContent: "center", flexWrap: "wrap" }}>
