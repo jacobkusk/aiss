@@ -118,24 +118,18 @@ export default function Home() {
           />
         )}
 
-        {/* A: nuværende scrubber */}
-        <div className="absolute bottom-6 left-1/2 z-30 flex flex-col items-center gap-3" style={{ transform: "translateX(-110%)" }}>
-          <span style={{ fontSize: "9px", fontFamily: "monospace", color: "rgba(255,255,255,0.3)", letterSpacing: "1px" }}>A — SCRUBBER</span>
+        {/* Begge kontroller stablet: B over A */}
+        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-30 flex flex-col items-center gap-2">
+          <TimePlayer
+            rangeMinutes={2880}
+            onScrub={setScrubMinutesAgo}
+            onLive={() => setScrubMinutesAgo(0)}
+          />
           <TimeScrubber
             rangeMinutes={2880}
             onScrub={setScrubMinutesAgo}
             onLive={() => setScrubMinutesAgo(0)}
             zoomLevel={zoomLevel}
-          />
-        </div>
-
-        {/* B: ny afspiller */}
-        <div className="absolute bottom-6 right-1/2 z-30 flex flex-col items-center gap-3" style={{ transform: "translateX(110%)" }}>
-          <span style={{ fontSize: "9px", fontFamily: "monospace", color: "rgba(255,255,255,0.3)", letterSpacing: "1px" }}>B — AFSPILLER</span>
-          <TimePlayer
-            rangeMinutes={2880}
-            onScrub={setScrubMinutesAgo}
-            onLive={() => setScrubMinutesAgo(0)}
           />
         </div>
       </div>
