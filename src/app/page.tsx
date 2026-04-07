@@ -144,10 +144,11 @@ export default function LandingPage() {
             letterSpacing: "-1px",
           }}
         >
-          AISs — open, saved &{" "}
+          AISs —{" "}
+          <span style={{ fontSize: "36px" }}>open, saved &{" "}
           <span style={{ color: "#6b8aff" }}>shared</span> protocol
           <br />
-          for AIS and soft AIS
+          for AIS and soft AIS</span>
         </h1>
 
         <p
