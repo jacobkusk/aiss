@@ -1,20 +1,21 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 
 interface Props {
   onScrub: (minutesAgo: number) => void;
   onLive: () => void;
+  onDateSelect?: (daysAgo: number) => void;
+  historicalDate?: string | null;
 }
 
 const COARSE_RANGE = 2880; // 2 dage
 const FINE_RANGE   = 120;  // 2 timer
 
-export default function DualScrubber({ onScrub, onLive }: Props) {
-  // coarseAgo = hvor langt tilbage vi er på den store slider (0 = nu)
+export default function DualScrubber({ onScrub, onLive, onDateSelect, historicalDate }: Props) {
   const [coarseAgo, setCoarseAgo] = useState(0);
-  // fineOffset = justering fra fine slider inden for ±FINE_RANGE/2 af coarse position
   const [fineAgo, setFineAgo] = useState(0);
+  const dateInputRef = useRef<HTMLInputElement>(null);
 
   const isLive = coarseAgo === 0 && fineAgo === 0;
 
@@ -45,7 +46,16 @@ export default function DualScrubber({ onScrub, onLive }: Props) {
     setCoarseAgo(0);
     setFineAgo(0);
     onLive();
+    if (onDateSelect) onDateSelect(0);
   };
+
+  const handleDateChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.value || !onDateSelect) return;
+    const selected = new Date(e.target.value);
+    const now = new Date();
+    const daysAgo = Math.round((now.getTime() - selected.getTime()) / 86_400_000);
+    onDateSelect(Math.max(0, daysAgo));
+  }, [onDateSelect]);
 
   const coarsePct = ((COARSE_RANGE - coarseAgo) / COARSE_RANGE) * 100;
   const finePct   = ((fineAgo + FINE_RANGE / 2) / FINE_RANGE) * 100;
@@ -111,6 +121,34 @@ export default function DualScrubber({ onScrub, onLive }: Props) {
         }}>
           {isLive ? "LIVE" : formatClock(totalAgo)}
         </button>
+
+        {/* Date picker */}
+        <div style={{ position: "relative" }}>
+          <button
+            onClick={() => dateInputRef.current?.showPicker()}
+            title="Gå til dato"
+            style={{
+              background: historicalDate ? "rgba(107,138,255,0.15)" : "rgba(255,255,255,0.06)",
+              border: historicalDate ? "1px solid rgba(107,138,255,0.4)" : "1px solid rgba(255,255,255,0.12)",
+              borderRadius: "4px",
+              color: historicalDate ? "#6b8aff" : "rgba(255,255,255,0.4)",
+              cursor: "pointer",
+              fontSize: "13px",
+              lineHeight: 1,
+              padding: "3px 5px",
+            }}
+          >
+            📅
+          </button>
+          <input
+            ref={dateInputRef}
+            type="date"
+            max={new Date().toISOString().split("T")[0]}
+            value={historicalDate ?? ""}
+            onChange={handleDateChange}
+            style={{ position: "absolute", opacity: 0, pointerEvents: "none", width: 0, height: 0 }}
+          />
+        </div>
       </div>
 
       <style jsx>{`
