@@ -421,14 +421,7 @@ export default function MapView({
 
     mapRef.current = map;
 
-    // Blue trails: fetched from ais_positions (last few waypoints per moving vessel)
-    async function fetchTrails() {
-      const { data, error } = await supabase.rpc("get_short_trails");
-      if (error || !data) return;
-      const geojson = typeof data === "string" ? JSON.parse(data) : data;
-      const trailSrc = map.getSource("trails") as maplibregl.GeoJSONSource | undefined;
-      if (trailSrc) trailSrc.setData(geojson);
-    }
+
 
     async function fetchVessels() {
       const { data, error } = await supabase.rpc("get_live_vessels_compact");
@@ -540,10 +533,7 @@ export default function MapView({
         type: "geojson",
         data: { type: "FeatureCollection", features: [] },
       });
-      map.addSource("trails", {
-        type: "geojson",
-        data: { type: "FeatureCollection", features: [] },
-      });
+
       map.addSource("routes", {
         type: "geojson",
         data: { type: "FeatureCollection", features: [] },
@@ -603,18 +593,6 @@ export default function MapView({
         paint: { "text-color": "#ffffff" },
       });
 
-      // Vessel trails (short blue tails behind moving vessels)
-      map.addLayer({
-        id: "vessel-trails",
-        type: "line",
-        source: "trails",
-        minzoom: 6,
-        paint: {
-          "line-color": "#6b8aff",
-          "line-width": 1.5,
-          "line-opacity": 0.4,
-        },
-      });
 
       // Ghost track (full route, faded white)
       map.addLayer({
@@ -826,10 +804,8 @@ export default function MapView({
       // Fetch data
       fetchVesselsRef.current = fetchVessels;
       fetchVessels();
-      fetchTrails();
       refreshTimerRef.current = setInterval(() => {
         fetchVessels();
-        fetchTrails();
       }, 30_000);
     });
 
