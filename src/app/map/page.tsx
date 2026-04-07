@@ -118,20 +118,22 @@ export default function Home() {
           />
         )}
 
-        {/* Begge kontroller stablet: B over A */}
-        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-30 flex flex-col items-center gap-2">
+        {/* TimePlayer — over slideren */}
+        <div className="absolute bottom-20 left-1/2 -translate-x-1/2 z-30">
           <TimePlayer
             rangeMinutes={2880}
             onScrub={setScrubMinutesAgo}
             onLive={() => setScrubMinutesAgo(0)}
           />
-          <TimeScrubber
-            rangeMinutes={2880}
-            onScrub={setScrubMinutesAgo}
-            onLive={() => setScrubMinutesAgo(0)}
-            zoomLevel={zoomLevel}
-          />
         </div>
+
+        {/* TimeScrubber — bunden */}
+        <TimeScrubber
+          rangeMinutes={2880}
+          onScrub={setScrubMinutesAgo}
+          onLive={() => setScrubMinutesAgo(0)}
+          zoomLevel={zoomLevel}
+        />
       </div>
     </div>
   );
