@@ -52,31 +52,31 @@ export default function LandingPage() {
 
       {/* Three columns */}
       <section style={{ maxWidth: "1100px", width: "100%", margin: "0 auto", padding: "0 24px 72px", display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "20px", position: "relative", zIndex: 10 }}>
-        {[
+        {([
           {
-            icon: "📡",
+            icon: <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#6b8aff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="2"/><path d="M8.5 8.5a5 5 0 0 0 0 7M15.5 8.5a5 5 0 0 1 0 7"/><path d="M5 5a10 10 0 0 0 0 14M19 5a10 10 0 0 1 0 14"/></svg>,
             title: "Open data",
             body: "33,000+ vessels tracked live. Free API. No key needed.",
             link: "/map",
             linkText: "View vessels →",
           },
           {
-            icon: "🔗",
+            icon: <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#6b8aff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M13 10a4 4 0 0 0-4-4H5a4 4 0 0 0 0 8h4"/><path d="M11 14a4 4 0 0 0 4 4h4a4 4 0 0 0 0-8h-4"/></svg>,
             title: ".aiss format",
             body: "One file per voyage. Identity, route, events — download, share, replay.",
             link: "/api",
             linkText: "Format spec →",
           },
           {
-            icon: "🌊",
+            icon: <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#6b8aff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M2 12c1.5-2 3-2 4.5 0s3 2 4.5 0 3-2 4.5 0 3 2 4.5 0"/><path d="M2 17c1.5-2 3-2 4.5 0s3 2 4.5 0 3-2 4.5 0 3 2 4.5 0"/><path d="M2 7c1.5-2 3-2 4.5 0s3 2 4.5 0 3-2 4.5 0 3 2 4.5 0"/></svg>,
             title: "Built for the sea",
             body: "AIS, GPS, radar, satellite — all fused into one protocol.",
             link: "/map",
             linkText: "See layers →",
           },
-        ].map((col) => (
+        ] as const).map((col) => (
           <div key={col.title} style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: "12px", padding: "28px 24px", display: "flex", flexDirection: "column", gap: "12px" }}>
-            <div style={{ fontSize: "24px" }}>{col.icon}</div>
+            <div>{col.icon}</div>
             <div style={{ fontSize: "16px", fontWeight: 600, color: "#fff" }}>{col.title}</div>
             <div style={{ fontSize: "14px", color: "rgba(255,255,255,0.5)", lineHeight: 1.65, flex: 1 }}>{col.body}</div>
             <a href={col.link} style={{ fontSize: "13px", color: "#6b8aff", textDecoration: "none", fontWeight: 500 }}>{col.linkText}</a>
