@@ -9,39 +9,55 @@ interface Props {
   zoomLevel?: number;
 }
 
-const AREA_PLAYBACK_MIN_ZOOM = 9;
+const ZOOM_PRESETS = [
+  { label: "1h", minutes: 60 },
+  { label: "6h", minutes: 360 },
+  { label: "24h", minutes: 1440 },
+  { label: "48h", minutes: 2880 },
+];
 
 export default function TimeScrubber({ rangeMinutes, onScrub, onLive, zoomLevel = 2 }: Props) {
-  const [value, setValue] = useState(rangeMinutes);
-  const isLive = value === rangeMinutes;
-  const minutesAgo = rangeMinutes - value;
-  const canAreaPlayback = zoomLevel >= AREA_PLAYBACK_MIN_ZOOM;
+  const [scrubRange, setScrubRange] = useState(rangeMinutes);
+  const [value, setValue] = useState(scrubRange); // max = live
+  const effectiveRange = Math.min(scrubRange, rangeMinutes);
+  const isLive = value >= effectiveRange;
+  const minutesAgo = effectiveRange - value;
 
   const formatClock = (minsAgo: number) => {
     if (minsAgo === 0) return "Now";
     const d = new Date(Date.now() - minsAgo * 60_000);
-    return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-  };
-
-  const startClock = () => {
-    const d = new Date(Date.now() - rangeMinutes * 60_000);
-    return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    const today = new Date();
+    const isToday = d.toDateString() === today.toDateString();
+    const time = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    return isToday ? time : `${d.toLocaleDateString([], { day: "numeric", month: "short" })} ${time}`;
   };
 
   const handleChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const v = Number(e.target.value);
     setValue(v);
-    const ago = rangeMinutes - v;
-    if (ago === 0) {
+    const ago = effectiveRange - v;
+    if (ago <= 0) {
       onLive();
     } else {
       onScrub(ago);
     }
-  }, [rangeMinutes, onScrub, onLive]);
+  }, [effectiveRange, onScrub, onLive]);
 
   const handleLive = () => {
-    setValue(rangeMinutes);
+    setValue(effectiveRange);
     onLive();
+  };
+
+  const handleZoom = (minutes: number) => {
+    setScrubRange(minutes);
+    // Keep current position if within new range, otherwise go live
+    const currentAgo = effectiveRange - value;
+    if (currentAgo > minutes) {
+      setValue(minutes);
+      onLive();
+    } else {
+      setValue(minutes - currentAgo);
+    }
   };
 
   return (
@@ -51,32 +67,56 @@ export default function TimeScrubber({ rangeMinutes, onScrub, onLive, zoomLevel 
         background: "rgba(15, 15, 42, 0.9)",
         backdropFilter: "blur(12px)",
         border: "1px solid rgba(255,255,255,0.1)",
-        minWidth: "360px",
-        maxWidth: "520px",
-        width: "60%",
+        minWidth: "380px",
+        maxWidth: "580px",
+        width: "65%",
       }}
     >
+      {/* Zoom presets */}
+      <div style={{ display: "flex", gap: "2px" }}>
+        {ZOOM_PRESETS.filter(p => p.minutes <= rangeMinutes).map(p => (
+          <button
+            key={p.label}
+            onClick={() => handleZoom(p.minutes)}
+            style={{
+              fontSize: "9px",
+              fontFamily: "var(--font-mono)",
+              fontWeight: 600,
+              color: scrubRange === p.minutes ? "#6b8aff" : "rgba(255,255,255,0.3)",
+              background: scrubRange === p.minutes ? "rgba(107, 138, 255, 0.15)" : "transparent",
+              border: scrubRange === p.minutes ? "1px solid rgba(107, 138, 255, 0.3)" : "1px solid transparent",
+              borderRadius: "3px",
+              padding: "2px 5px",
+              cursor: "pointer",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {p.label}
+          </button>
+        ))}
+      </div>
+
       <span style={{
         fontSize: "11px",
         fontFamily: "var(--font-mono)",
         color: "rgba(255,255,255,0.4)",
         whiteSpace: "nowrap",
       }}>
-        {startClock()}
+        {formatClock(effectiveRange)}
       </span>
 
       <input
         type="range"
         min={0}
-        max={rangeMinutes}
+        max={effectiveRange}
         step={1}
-        value={value}
+        value={Math.min(value, effectiveRange)}
         onChange={handleChange}
         style={{
           flex: 1,
           height: "4px",
           appearance: "none",
-          background: `linear-gradient(to right, #6b8aff ${(value / rangeMinutes) * 100}%, rgba(255,255,255,0.15) ${(value / rangeMinutes) * 100}%)`,
+          background: `linear-gradient(to right, #6b8aff ${(Math.min(value, effectiveRange) / effectiveRange) * 100}%, rgba(255,255,255,0.15) ${(Math.min(value, effectiveRange) / effectiveRange) * 100}%)`,
           borderRadius: "2px",
           outline: "none",
           cursor: "pointer",
@@ -100,31 +140,6 @@ export default function TimeScrubber({ rangeMinutes, onScrub, onLive, zoomLevel 
       >
         {isLive ? "LIVE" : formatClock(minutesAgo)}
       </button>
-
-      {/* Area playback indicator */}
-      <span style={{
-        fontSize: "8px",
-        fontFamily: "var(--font-mono)",
-        fontWeight: 600,
-        letterSpacing: "0.5px",
-        color: canAreaPlayback ? "rgba(107, 138, 255, 0.6)" : "rgba(255,255,255,0.2)",
-        whiteSpace: "nowrap",
-        borderLeft: "1px solid rgba(255,255,255,0.1)",
-        paddingLeft: "10px",
-        display: "flex",
-        alignItems: "center",
-        gap: "4px",
-        transition: "color 0.3s",
-      }}>
-        <span style={{
-          width: "4px",
-          height: "4px",
-          borderRadius: "50%",
-          background: canAreaPlayback ? "#6b8aff" : "rgba(255,255,255,0.15)",
-          transition: "background 0.3s",
-        }} />
-        {canAreaPlayback ? "AREA" : "AREA"}
-      </span>
 
       <style jsx>{`
         input[type="range"]::-webkit-slider-thumb {

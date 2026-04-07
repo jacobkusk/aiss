@@ -255,13 +255,18 @@ export default function MapView({
 
     const points: [number, number][] = filtered.map((f: any) => f.geometry.coordinates);
 
-    // Orange line = track up to scrub point
+    // Yellow line = track up to scrub point, with thinned waypoint dots
     if (points.length >= 2) {
+      // Thin dots: show every Nth point based on total count (keep first + last always)
+      const step = points.length > 200 ? 10 : points.length > 50 ? 5 : 1;
+      const thinnedDots = filtered.filter((_: any, i: number) =>
+        i === 0 || i === filtered.length - 1 || i % step === 0
+      );
       trackSrc.setData({
         type: "FeatureCollection",
         features: [
           { type: "Feature", properties: {}, geometry: { type: "LineString", coordinates: points } },
-          ...filtered,
+          ...thinnedDots,
         ],
       });
     } else if (points.length === 1) {
