@@ -47,9 +47,6 @@ export default function LandingPage() {
           <Link href="/map" style={{ fontSize: "15px", fontWeight: 600, color: "#fff", background: "linear-gradient(135deg, #4a6aff, #6b8aff)", padding: "14px 32px", borderRadius: "8px", textDecoration: "none" }}>
             Explore Live Map
           </Link>
-          <a href="/api" style={{ fontSize: "15px", fontWeight: 600, color: "#8ba4ff", background: "transparent", padding: "14px 32px", borderRadius: "8px", border: "1px solid rgba(107,138,255,0.3)", textDecoration: "none" }}>
-            Read the API docs →
-          </a>
         </div>
       </section>
 
@@ -108,7 +105,7 @@ export default function LandingPage() {
       <section style={{ maxWidth: "760px", margin: "0 auto", padding: "80px 24px 64px", position: "relative", zIndex: 10 }}>
         <p style={{ fontSize: "13px", fontWeight: 600, letterSpacing: "1.5px", color: "#6b8aff", textTransform: "uppercase", marginBottom: "24px" }}>Why AISs</p>
         <h2 style={{ fontSize: "32px", fontWeight: 700, lineHeight: 1.2, margin: "0 0 16px", letterSpacing: "-0.5px" }}>
-          MarineTraffic takes your data<br />and sells it back.
+          Maritime data should be open.
         </h2>
         <p style={{ fontSize: "20px", color: "#6b8aff", fontWeight: 500, margin: "0 0 40px" }}>AISs gives it to everyone.</p>
         <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: "14px" }}>
