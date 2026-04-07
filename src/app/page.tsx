@@ -146,8 +146,9 @@ export default function LandingPage() {
         >
           AISs protocol
           <br />
-          <span style={{ fontSize: "32px", fontWeight: 500, letterSpacing: "0px" }}>
-            open · saved · <span style={{ color: "#6b8aff" }}>shared</span> AIS and soft AIS marine data
+          <span style={{ fontSize: "28px", fontWeight: 400, letterSpacing: "0px" }}>
+            One open format for AIS, soft AIS and maritime sensor data —{" "}
+            <span style={{ color: "#6b8aff" }}>collected, saved and shared</span> by anyone.
           </span>
         </h1>
 
