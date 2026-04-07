@@ -5,6 +5,7 @@ import type maplibregl from "maplibre-gl";
 import LeftPanel from "@/components/LeftPanel";
 import MapView, { DEFAULT_OVERLAYS, type Overlays, type MapStyle } from "@/components/MapView";
 import TimeScrubber from "@/components/TimeScrubber";
+import TimePlayer from "@/components/TimePlayer";
 
 import LiveHistoricalBadge from "@/components/LiveHistoricalBadge";
 import VesselPopup from "@/components/VesselPopup";
@@ -117,12 +118,26 @@ export default function Home() {
           />
         )}
 
-        <TimeScrubber
-          rangeMinutes={2880}
-          onScrub={setScrubMinutesAgo}
-          onLive={() => setScrubMinutesAgo(0)}
-          zoomLevel={zoomLevel}
-        />
+        {/* A: nuværende scrubber */}
+        <div className="absolute bottom-6 left-1/2 z-30 flex flex-col items-center gap-3" style={{ transform: "translateX(-110%)" }}>
+          <span style={{ fontSize: "9px", fontFamily: "monospace", color: "rgba(255,255,255,0.3)", letterSpacing: "1px" }}>A — SCRUBBER</span>
+          <TimeScrubber
+            rangeMinutes={2880}
+            onScrub={setScrubMinutesAgo}
+            onLive={() => setScrubMinutesAgo(0)}
+            zoomLevel={zoomLevel}
+          />
+        </div>
+
+        {/* B: ny afspiller */}
+        <div className="absolute bottom-6 right-1/2 z-30 flex flex-col items-center gap-3" style={{ transform: "translateX(110%)" }}>
+          <span style={{ fontSize: "9px", fontFamily: "monospace", color: "rgba(255,255,255,0.3)", letterSpacing: "1px" }}>B — AFSPILLER</span>
+          <TimePlayer
+            rangeMinutes={2880}
+            onScrub={setScrubMinutesAgo}
+            onLive={() => setScrubMinutesAgo(0)}
+          />
+        </div>
       </div>
     </div>
   );
