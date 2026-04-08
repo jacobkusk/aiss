@@ -2,7 +2,12 @@
 
 import { useState } from "react";
 import Logo from "./Logo";
-import StatsBar from "./StatsBar";
+import CollectorTile from "./CollectorTile";
+import StringBuilderTile from "./StringBuilderTile";
+import VesselsTile from "./VesselsTile";
+import FilterTile from "./FilterTile";
+import TerminalFeed from "./TerminalFeed";
+import LiveHistoricalBadge from "./LiveHistoricalBadge";
 import SearchInput from "./SearchInput";
 import TimeMachine from "./TimeMachine";
 import { OVERLAY_LABELS, type Overlays, type MapStyle } from "./MapView";
@@ -10,6 +15,9 @@ import { OVERLAY_LABELS, type Overlays, type MapStyle } from "./MapView";
 interface Props {
   onTimeMachineChange: (daysAgo: number) => void;
   isLive: boolean;
+  vesselCount: number;
+  date: string | null;
+  routeCount: number;
   overlays: Overlays;
   onToggleOverlay: (key: string) => void;
   mapStyle: MapStyle;
@@ -181,7 +189,7 @@ function FilterCheck({ label, checked, color, onChange, locked }: {
   );
 }
 
-export default function LeftPanel({ onTimeMachineChange, isLive, overlays, onToggleOverlay, mapStyle, onMapStyleChange, onClose }: Props) {
+export default function LeftPanel({ onTimeMachineChange, isLive, vesselCount, date, routeCount, overlays, onToggleOverlay, mapStyle, onMapStyleChange, onClose }: Props) {
   return (
     <div
       className="flex flex-col w-[380px] shrink-0 h-full max-md:hidden"
@@ -208,7 +216,14 @@ export default function LeftPanel({ onTimeMachineChange, isLive, overlays, onTog
         </button>
       </div>
 
-      <StatsBar />
+      <div style={{ padding: "0 16px 12px", flexShrink: 0 }}>
+        <LiveHistoricalBadge isLive={isLive} vesselCount={vesselCount} date={date} routeCount={routeCount} />
+      </div>
+      <TerminalFeed />
+      <CollectorTile />
+      <StringBuilderTile />
+      <VesselsTile />
+      <FilterTile />
       <SearchInput onSelect={() => {}} />
 
       {/* Map Style */}
@@ -295,8 +310,10 @@ export default function LeftPanel({ onTimeMachineChange, isLive, overlays, onTog
         </Section>
       ))}
 
-      {/* Bottom spacing */}
-      <div style={{ height: "24px", flexShrink: 0 }} />
+      {/* Time Machine — bottom */}
+      <div style={{ borderTop: "1px solid rgba(255,255,255,0.08)", marginTop: "auto", flexShrink: 0 }}>
+        <TimeMachine onChange={onTimeMachineChange} isLive={isLive} />
+      </div>
     </div>
   );
 }
