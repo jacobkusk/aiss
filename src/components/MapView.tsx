@@ -952,7 +952,9 @@ export default function MapView({
       // Click on waypoint dot — segment analysis (first click = A, second click = B)
       map.on("click", "selected-track-dots-hitarea", (e) => {
         if (measureActiveRef.current) return;
-        e.originalEvent.stopPropagation();
+        // Skip if clicking on a vessel icon — vessel click takes priority
+        const vesselHit = map.queryRenderedFeatures(e.point, { layers: ["ais-vessels"] });
+        if (vesselHit.length > 0) return;
         const raw = e.features?.[0];
         if (!raw) return;
         // Convert MapLibre feature to plain GeoJSON (MapLibre features have extra internal fields)
