@@ -74,8 +74,9 @@ function formatDuration(ms: number): string {
   const totalMin = Math.round(ms / 60_000);
   const h = Math.floor(totalMin / 60);
   const m = totalMin % 60;
-  if (h === 0) return `${m}m`;
-  return `${h}t ${m}m`;
+  if (h === 0) return `${m} min`;
+  if (m === 0) return `${h} t`;
+  return `${h} t ${m} min`;
 }
 
 // ── Position prediction ───────────────────────────────────────────────────────
@@ -1337,7 +1338,7 @@ export default function MapView({
 
           {/* Header */}
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px" }}>
-            <span style={{ fontSize: "11px", fontFamily: "var(--font-mono)", color: "rgba(255,255,255,0.5)", letterSpacing: "0.1em" }}>
+            <span style={{ fontSize: "11px", fontFamily: "var(--font-mono)", color: "rgba(255,255,255,0.75)", letterSpacing: "0.1em" }}>
               SEGMENT ANALYSE
             </span>
             <button
@@ -1351,7 +1352,7 @@ export default function MapView({
                 (mapRef.current?.getSource("segment-highlight") as any)?.setData(empty);
                 (mapRef.current?.getSource("waypoint-markers") as any)?.setData(empty);
               }}
-              style={{ fontSize: "14px", color: "rgba(255,255,255,0.5)", background: "transparent", border: "none", cursor: "pointer", padding: "0 0 0 8px", lineHeight: 1 }}
+              style={{ fontSize: "14px", color: "rgba(255,255,255,0.75)", background: "transparent", border: "none", cursor: "pointer", padding: "0 0 0 8px", lineHeight: 1 }}
             >✕</button>
           </div>
 
@@ -1362,7 +1363,7 @@ export default function MapView({
               <div style={{ fontSize: "14px", fontFamily: "var(--font-mono)", fontWeight: 600, color: "#ffffff" }}>
                 {new Date(segmentPanel.a.properties?.recorded_at).toLocaleTimeString("da-DK", { hour: "2-digit", minute: "2-digit" })}
               </div>
-              <div style={{ fontSize: "11px", fontFamily: "var(--font-mono)", color: "rgba(255,255,255,0.5)", marginTop: "2px" }}>
+              <div style={{ fontSize: "11px", fontFamily: "var(--font-mono)", color: "rgba(255,255,255,0.75)", marginTop: "2px" }}>
                 {new Date(segmentPanel.a.properties?.recorded_at).toLocaleDateString("da-DK", { day: "2-digit", month: "short" })}
               </div>
             </div>
@@ -1371,12 +1372,12 @@ export default function MapView({
               <div style={{ fontSize: "14px", fontFamily: "var(--font-mono)", fontWeight: 600, color: "#ffffff" }}>
                 {new Date(segmentPanel.b.properties?.recorded_at).toLocaleTimeString("da-DK", { hour: "2-digit", minute: "2-digit" })}
               </div>
-              <div style={{ fontSize: "11px", fontFamily: "var(--font-mono)", color: "rgba(255,255,255,0.5)", marginTop: "2px" }}>
+              <div style={{ fontSize: "11px", fontFamily: "var(--font-mono)", color: "rgba(255,255,255,0.75)", marginTop: "2px" }}>
                 {new Date(segmentPanel.b.properties?.recorded_at).toLocaleDateString("da-DK", { day: "2-digit", month: "short" })}
               </div>
             </div>
             <div style={{ flex: 1, textAlign: "right" }}>
-              <div style={{ fontSize: "10px", fontFamily: "var(--font-mono)", color: "rgba(255,255,255,0.5)", letterSpacing: "0.08em", marginBottom: "4px" }}>TID</div>
+              <div style={{ fontSize: "10px", fontFamily: "var(--font-mono)", color: "rgba(255,255,255,0.8)", letterSpacing: "0.08em", marginBottom: "4px" }}>VARIGHED</div>
               <div style={{ fontSize: "14px", fontFamily: "var(--font-mono)", fontWeight: 600, color: "#ffffff" }}>
                 {formatDuration(segmentPanel.timeMs)}
               </div>
@@ -1389,18 +1390,18 @@ export default function MapView({
           {/* Distance + Speed */}
           <div style={{ display: "flex", gap: "10px", marginBottom: "12px" }}>
             <div style={{ flex: 1 }}>
-              <div style={{ fontSize: "10px", fontFamily: "var(--font-mono)", color: "rgba(255,255,255,0.5)", letterSpacing: "0.08em", marginBottom: "4px" }}>AFSTAND</div>
+              <div style={{ fontSize: "10px", fontFamily: "var(--font-mono)", color: "rgba(255,255,255,0.8)", letterSpacing: "0.08em", marginBottom: "4px" }}>AFSTAND</div>
               <div style={{ fontSize: "22px", fontFamily: "var(--font-mono)", fontWeight: 700, color: "#ffffff", lineHeight: 1 }}>
-                {segmentPanel.distNm} <span style={{ fontSize: "13px", color: "rgba(255,255,255,0.6)", fontWeight: 400 }}>nm</span>
+                {segmentPanel.distNm} <span style={{ fontSize: "13px", color: "rgba(255,255,255,0.8)", fontWeight: 400 }}>nm</span>
               </div>
-              <div style={{ fontSize: "13px", fontFamily: "var(--font-mono)", color: "rgba(255,255,255,0.45)", marginTop: "3px" }}>
+              <div style={{ fontSize: "13px", fontFamily: "var(--font-mono)", color: "rgba(255,255,255,0.75)", marginTop: "3px" }}>
                 {segmentPanel.distKm} km
               </div>
             </div>
             <div style={{ flex: 1 }}>
-              <div style={{ fontSize: "10px", fontFamily: "var(--font-mono)", color: "rgba(255,255,255,0.5)", letterSpacing: "0.08em", marginBottom: "4px" }}>GNSN. FART</div>
+              <div style={{ fontSize: "10px", fontFamily: "var(--font-mono)", color: "rgba(255,255,255,0.8)", letterSpacing: "0.08em", marginBottom: "4px" }}>GNSN. FART</div>
               <div style={{ fontSize: "22px", fontFamily: "var(--font-mono)", fontWeight: 700, color: segmentPanel.anomaly ? "#ff4444" : "#ffffff", lineHeight: 1 }}>
-                {segmentPanel.avgSpeedKn} <span style={{ fontSize: "13px", color: "rgba(255,255,255,0.6)", fontWeight: 400 }}>kn</span>
+                {segmentPanel.avgSpeedKn} <span style={{ fontSize: "13px", color: "rgba(255,255,255,0.8)", fontWeight: 400 }}>kn</span>
               </div>
             </div>
           </div>
@@ -1408,7 +1409,7 @@ export default function MapView({
           {/* Checksum bar */}
           <div>
             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}>
-              <span style={{ fontSize: "10px", fontFamily: "var(--font-mono)", color: "rgba(255,255,255,0.45)", letterSpacing: "0.06em" }}>
+              <span style={{ fontSize: "10px", fontFamily: "var(--font-mono)", color: "rgba(255,255,255,0.8)", letterSpacing: "0.06em" }}>
                 CHECKSUM — MAX {segmentPanel.maxSpeedKn} kn
               </span>
               {segmentPanel.anomaly && (
