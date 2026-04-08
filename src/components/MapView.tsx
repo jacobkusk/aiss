@@ -432,6 +432,8 @@ export default function MapView({
               course: r[4], heading: r[5], nav_status: r[6],
               destination: "", source: "aisstream",
               prev_lat: r[8], prev_lon: r[9],
+              updated_at: r[10] ? new Date(r[10] * 1000).toISOString() : null,
+              stale: r[10] ? (Date.now() / 1000 - r[10]) > 1800 : false,
             },
           })),
         };
@@ -703,7 +705,7 @@ export default function MapView({
           "icon-ignore-placement": true,
         },
         paint: {
-          "icon-opacity": ["case", uw, 0.95, 0] as any,
+          "icon-opacity": ["case", uw, ["case", ["get", "stale"], 0.35, 0.95], 0] as any,
         },
       } as any);
 
@@ -716,7 +718,7 @@ export default function MapView({
         paint: {
           "circle-radius": ["interpolate", ["linear"], ["zoom"], 2, 3, 8, 5, 14, 7] as any,
           "circle-color": ["match", ["to-number", ["get", "ship_type"], 0], ...SHIP_TYPE_COLORS, "#38b038"] as any,
-          "circle-opacity": 0.85,
+          "circle-opacity": ["case", ["get", "stale"], 0.3, 0.85] as any,
           "circle-stroke-width": 1,
           "circle-stroke-color": "rgba(0,0,0,0.5)",
         },
