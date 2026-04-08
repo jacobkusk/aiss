@@ -143,7 +143,7 @@ const OVERLAY_LABELS: Record<string, { label: string; color: string }> = {
   underway: { label: "Underway", color: "#00e676" },
   anchored: { label: "At Anchor", color: "#5a8090" },
   predictions: { label: "Predictions", color: "#ffffff" },
-  cargo: { label: "Cargo", color: "#4a8f4a" },
+  cargo: { label: "Cargo", color: "#38b038" },
   tanker: { label: "Tanker", color: "#c44040" },
   passenger: { label: "Passenger", color: "#4a90d9" },
   fishing: { label: "Fishing", color: "#d4a017" },
@@ -181,8 +181,8 @@ const SHIP_TYPE_COLORS = [
   60, "#4a90d9", 61, "#4a90d9", 62, "#4a90d9", 63, "#4a90d9", 64, "#4a90d9",
   65, "#4a90d9", 66, "#4a90d9", 67, "#4a90d9", 68, "#4a90d9", 69, "#4a90d9",
   // Cargo (70-79)
-  70, "#4a8f4a", 71, "#4a8f4a", 72, "#4a8f4a", 73, "#4a8f4a", 74, "#4a8f4a",
-  75, "#4a8f4a", 76, "#4a8f4a", 77, "#4a8f4a", 78, "#4a8f4a", 79, "#4a8f4a",
+  70, "#38b038", 71, "#38b038", 72, "#38b038", 73, "#38b038", 74, "#38b038",
+  75, "#38b038", 76, "#38b038", 77, "#38b038", 78, "#38b038", 79, "#38b038",
   // Tanker (80-89)
   80, "#c44040", 81, "#c44040", 82, "#c44040", 83, "#c44040", 84, "#c44040",
   85, "#c44040", 86, "#c44040", 87, "#c44040", 88, "#c44040", 89, "#c44040",
@@ -467,8 +467,8 @@ export default function MapView({
 
       // Generate vessel icons via canvas (sync)
       const iconColors: Record<string, string> = {
-        cargo: "#4a8f4a", tanker: "#c44040", passenger: "#4a90d9",
-        fishing: "#d4a017", sailing: "#2ba8c8", special: "#e07020", unknown: "#4a8f4a",
+        cargo: "#38b038", tanker: "#c44040", passenger: "#4a90d9",
+        fishing: "#d4a017", sailing: "#2ba8c8", special: "#e07020", unknown: "#38b038",
       };
       // Sharp arrow shape like MarineTraffic — narrow, pointy
       const makeArrow = (color: string, w: number, h: number): ImageData => {
@@ -483,8 +483,8 @@ export default function MapView({
         ctx.lineTo(1, h);               // bottom left
         ctx.closePath();
         ctx.fill();
-        ctx.strokeStyle = "rgba(255,255,255,0.95)";
-        ctx.lineWidth = 1.5;
+        ctx.strokeStyle = "rgba(0,0,0,0.55)";
+        ctx.lineWidth = 1;
         ctx.stroke();
         return ctx.getImageData(0, 0, w, h);
       };
@@ -497,8 +497,8 @@ export default function MapView({
         ctx.beginPath();
         ctx.arc(7, 7, 5, 0, Math.PI * 2);
         ctx.fill();
-        ctx.strokeStyle = "rgba(255,255,255,0.95)";
-        ctx.lineWidth = 2.5;
+        ctx.strokeStyle = "rgba(0,0,0,0.55)";
+        ctx.lineWidth = 1.5;
         ctx.stroke();
         return ctx.getImageData(0, 0, size, size);
       };
