@@ -1192,12 +1192,12 @@ export default function MapView({
         </div>
       )}
 
-      {/* Segment analysis panel — fixed top-right, never overlaps the line */}
+      {/* Segment analysis panel — below vessel popup on the left */}
       {segmentPanel && (
         <div style={{
           position: "absolute",
-          top: "56px",
-          right: "16px",
+          top: "264px",
+          left: "16px",
           zIndex: 20,
           background: "rgba(10, 14, 30, 0.97)",
           backdropFilter: "blur(16px)",
