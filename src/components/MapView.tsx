@@ -1178,7 +1178,7 @@ export default function MapView({
       <div
         ref={containerRef}
         className="w-full h-full"
-        style={{ background: "#e8e8e8" }}
+        style={{ background: mapStyle === "dark" ? "radial-gradient(ellipse at 50% 50%, #0d1b2a 0%, #060c14 100%)" : "#e8e8e8" }}
       />
 
       {/* Globe/Map Segmented Control */}
