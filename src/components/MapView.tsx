@@ -267,6 +267,11 @@ export default function MapView({
   const waypointARef = useRef<any>(null);
   const filteredWaypointsRef = useRef<any[]>([]);
   const selectedShipTypeRef = useRef<number>(0);
+  // Segment panel position — follows the midpoint of the highlighted segment on the map
+  const segmentMidpointGeoRef = useRef<[number, number] | null>(null);
+  const [segmentPanelPx, setSegmentPanelPx] = useState<{ x: number; y: number } | null>(null);
+  const setSegmentPanelPxRef = useRef(setSegmentPanelPx);
+  setSegmentPanelPxRef.current = setSegmentPanelPx;
 
   const onVesselsUpdateRef = useRef(onVesselsUpdate);
   const onVesselClickRef = useRef(onVesselClick);
@@ -908,7 +913,9 @@ export default function MapView({
           selectedShipTypeRef.current = p.ship_type ?? 0;
           // Clear any previous segment analysis when switching vessel
           waypointARef.current = null;
+          segmentMidpointGeoRef.current = null;
           setWaypointASelectedRef.current(false);
+          setSegmentPanelPxRef.current(null);
           segmentPanelSetRef.current(null);
 
           onVesselClickRef.current({
@@ -1024,6 +1031,13 @@ export default function MapView({
             ],
           });
 
+          // Anchor panel to midpoint of segment
+          const midIdx = Math.floor(segment.length / 2);
+          const midCoords = segment[midIdx].geometry.coordinates as [number, number];
+          segmentMidpointGeoRef.current = midCoords;
+          const midPx = map.project(midCoords);
+          setSegmentPanelPxRef.current({ x: Math.round(midPx.x), y: Math.round(midPx.y) });
+
           // Show stats panel
           segmentPanelSetRef.current({
             a: first, b: second,
@@ -1057,7 +1071,9 @@ export default function MapView({
           (map.getSource("segment-highlight") as maplibregl.GeoJSONSource | undefined)?.setData(empty);
           (map.getSource("waypoint-markers") as maplibregl.GeoJSONSource | undefined)?.setData(empty);
           waypointARef.current = null;
+          segmentMidpointGeoRef.current = null;
           setWaypointASelectedRef.current(false);
+          setSegmentPanelPxRef.current(null);
           segmentPanelSetRef.current(null);
         }
       });
@@ -1085,6 +1101,13 @@ export default function MapView({
       // Track zoom level
       map.on("zoomend", () => {
         onZoomChangeRef.current?.(Math.round(map.getZoom()));
+      });
+
+      // Keep segment panel anchored to map during pan/zoom
+      map.on("move", () => {
+        if (!segmentMidpointGeoRef.current) return;
+        const pt = map.project(segmentMidpointGeoRef.current);
+        setSegmentPanelPxRef.current({ x: Math.round(pt.x), y: Math.round(pt.y) });
       });
 
       // Fetch data
@@ -1292,119 +1315,135 @@ export default function MapView({
         </div>
       )}
 
-      {/* Segment analysis panel */}
-      {segmentPanel && (
+      {/* Segment analysis panel — anchored to midpoint of selected segment */}
+      {segmentPanel && segmentPanelPx && (
         <div style={{
           position: "absolute",
-          bottom: "90px",
-          left: "50%",
-          transform: "translateX(-50%)",
+          left: segmentPanelPx.x,
+          top: segmentPanelPx.y,
+          transform: "translate(-50%, calc(-100% - 18px))",
           zIndex: 20,
           background: "rgba(10, 14, 30, 0.97)",
           backdropFilter: "blur(16px)",
           border: segmentPanel.anomaly
             ? "1px solid rgba(255, 60, 60, 0.7)"
-            : "1px solid rgba(0, 229, 255, 0.35)",
+            : "1px solid rgba(0, 229, 255, 0.4)",
           borderRadius: "12px",
-          padding: "14px 18px",
-          minWidth: "280px",
-          maxWidth: "340px",
-          boxShadow: "0 4px 32px rgba(0,0,0,0.45)",
+          padding: "16px 20px",
+          minWidth: "300px",
+          maxWidth: "360px",
+          boxShadow: "0 6px 40px rgba(0,0,0,0.55)",
+          pointerEvents: "auto",
         }}>
+          {/* Stem / arrow pointing down to the segment */}
+          <div style={{
+            position: "absolute",
+            bottom: -8,
+            left: "50%",
+            transform: "translateX(-50%)",
+            width: 0,
+            height: 0,
+            borderLeft: "8px solid transparent",
+            borderRight: "8px solid transparent",
+            borderTop: segmentPanel.anomaly
+              ? "8px solid rgba(255,60,60,0.7)"
+              : "8px solid rgba(0,229,255,0.4)",
+          }} />
+
           {/* Header */}
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
-            <span style={{ fontSize: "9px", fontFamily: "var(--font-mono)", color: "rgba(255,255,255,0.5)", letterSpacing: "0.1em" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px" }}>
+            <span style={{ fontSize: "11px", fontFamily: "var(--font-mono)", color: "rgba(255,255,255,0.5)", letterSpacing: "0.1em" }}>
               SEGMENT ANALYSE
             </span>
             <button
               onClick={() => {
                 setSegmentPanel(null);
+                setSegmentPanelPx(null);
+                segmentMidpointGeoRef.current = null;
                 waypointARef.current = null;
                 setWaypointASelected(false);
                 const empty: GeoJSON.FeatureCollection = { type: "FeatureCollection", features: [] };
                 (mapRef.current?.getSource("segment-highlight") as any)?.setData(empty);
                 (mapRef.current?.getSource("waypoint-markers") as any)?.setData(empty);
               }}
-              style={{ fontSize: "12px", color: "rgba(255,255,255,0.5)", background: "transparent", border: "none", cursor: "pointer", padding: "0 0 0 8px", lineHeight: 1 }}
+              style={{ fontSize: "14px", color: "rgba(255,255,255,0.5)", background: "transparent", border: "none", cursor: "pointer", padding: "0 0 0 8px", lineHeight: 1 }}
             >✕</button>
           </div>
 
-          {/* From / To */}
-          <div style={{ display: "flex", gap: "8px", marginBottom: "12px" }}>
+          {/* From / To / Duration */}
+          <div style={{ display: "flex", gap: "10px", marginBottom: "14px" }}>
             <div style={{ flex: 1 }}>
-              <div style={{ fontSize: "8px", fontFamily: "var(--font-mono)", color: "#00e5ff", letterSpacing: "0.08em", marginBottom: "3px" }}>FRA ●</div>
-              <div style={{ fontSize: "11px", fontFamily: "var(--font-mono)", color: "rgba(255,255,255,0.85)" }}>
+              <div style={{ fontSize: "10px", fontFamily: "var(--font-mono)", color: "#00e5ff", letterSpacing: "0.08em", marginBottom: "4px" }}>FRA ●</div>
+              <div style={{ fontSize: "14px", fontFamily: "var(--font-mono)", fontWeight: 600, color: "#ffffff" }}>
                 {new Date(segmentPanel.a.properties?.recorded_at).toLocaleTimeString("da-DK", { hour: "2-digit", minute: "2-digit" })}
               </div>
-              <div style={{ fontSize: "9px", fontFamily: "var(--font-mono)", color: "rgba(255,255,255,0.45)" }}>
+              <div style={{ fontSize: "11px", fontFamily: "var(--font-mono)", color: "rgba(255,255,255,0.5)", marginTop: "2px" }}>
                 {new Date(segmentPanel.a.properties?.recorded_at).toLocaleDateString("da-DK", { day: "2-digit", month: "short" })}
               </div>
             </div>
             <div style={{ flex: 1 }}>
-              <div style={{ fontSize: "8px", fontFamily: "var(--font-mono)", color: "#ff6b35", letterSpacing: "0.08em", marginBottom: "3px" }}>TIL ●</div>
-              <div style={{ fontSize: "11px", fontFamily: "var(--font-mono)", color: "rgba(255,255,255,0.85)" }}>
+              <div style={{ fontSize: "10px", fontFamily: "var(--font-mono)", color: "#ff6b35", letterSpacing: "0.08em", marginBottom: "4px" }}>TIL ●</div>
+              <div style={{ fontSize: "14px", fontFamily: "var(--font-mono)", fontWeight: 600, color: "#ffffff" }}>
                 {new Date(segmentPanel.b.properties?.recorded_at).toLocaleTimeString("da-DK", { hour: "2-digit", minute: "2-digit" })}
               </div>
-              <div style={{ fontSize: "9px", fontFamily: "var(--font-mono)", color: "rgba(255,255,255,0.45)" }}>
+              <div style={{ fontSize: "11px", fontFamily: "var(--font-mono)", color: "rgba(255,255,255,0.5)", marginTop: "2px" }}>
                 {new Date(segmentPanel.b.properties?.recorded_at).toLocaleDateString("da-DK", { day: "2-digit", month: "short" })}
               </div>
             </div>
             <div style={{ flex: 1, textAlign: "right" }}>
-              <div style={{ fontSize: "8px", fontFamily: "var(--font-mono)", color: "rgba(255,255,255,0.45)", letterSpacing: "0.08em", marginBottom: "3px" }}>TID</div>
-              <div style={{ fontSize: "11px", fontFamily: "var(--font-mono)", color: "rgba(255,255,255,0.85)" }}>
+              <div style={{ fontSize: "10px", fontFamily: "var(--font-mono)", color: "rgba(255,255,255,0.5)", letterSpacing: "0.08em", marginBottom: "4px" }}>TID</div>
+              <div style={{ fontSize: "14px", fontFamily: "var(--font-mono)", fontWeight: 600, color: "#ffffff" }}>
                 {formatDuration(segmentPanel.timeMs)}
               </div>
             </div>
           </div>
 
           {/* Divider */}
-          <div style={{ borderTop: "1px solid rgba(255,255,255,0.08)", marginBottom: "12px" }} />
+          <div style={{ borderTop: "1px solid rgba(255,255,255,0.1)", marginBottom: "14px" }} />
 
           {/* Distance + Speed */}
-          <div style={{ display: "flex", gap: "8px", marginBottom: "10px" }}>
+          <div style={{ display: "flex", gap: "10px", marginBottom: "12px" }}>
             <div style={{ flex: 1 }}>
-              <div style={{ fontSize: "8px", fontFamily: "var(--font-mono)", color: "rgba(255,255,255,0.45)", letterSpacing: "0.08em", marginBottom: "2px" }}>AFSTAND</div>
-              <div style={{ fontSize: "18px", fontFamily: "var(--font-mono)", fontWeight: 700, color: "#ffffff", lineHeight: 1 }}>
-                {segmentPanel.distNm} <span style={{ fontSize: "11px", color: "rgba(255,255,255,0.6)", fontWeight: 400 }}>nm</span>
+              <div style={{ fontSize: "10px", fontFamily: "var(--font-mono)", color: "rgba(255,255,255,0.5)", letterSpacing: "0.08em", marginBottom: "4px" }}>AFSTAND</div>
+              <div style={{ fontSize: "22px", fontFamily: "var(--font-mono)", fontWeight: 700, color: "#ffffff", lineHeight: 1 }}>
+                {segmentPanel.distNm} <span style={{ fontSize: "13px", color: "rgba(255,255,255,0.6)", fontWeight: 400 }}>nm</span>
               </div>
-              <div style={{ fontSize: "11px", fontFamily: "var(--font-mono)", color: "rgba(255,255,255,0.45)", marginTop: "2px" }}>
+              <div style={{ fontSize: "13px", fontFamily: "var(--font-mono)", color: "rgba(255,255,255,0.45)", marginTop: "3px" }}>
                 {segmentPanel.distKm} km
               </div>
             </div>
             <div style={{ flex: 1 }}>
-              <div style={{ fontSize: "8px", fontFamily: "var(--font-mono)", color: "rgba(255,255,255,0.45)", letterSpacing: "0.08em", marginBottom: "2px" }}>GNSN. FART</div>
-              <div style={{ fontSize: "18px", fontFamily: "var(--font-mono)", fontWeight: 700, color: segmentPanel.anomaly ? "#ff4444" : "#ffffff", lineHeight: 1 }}>
-                {segmentPanel.avgSpeedKn} <span style={{ fontSize: "11px", color: "rgba(255,255,255,0.6)", fontWeight: 400 }}>kn</span>
+              <div style={{ fontSize: "10px", fontFamily: "var(--font-mono)", color: "rgba(255,255,255,0.5)", letterSpacing: "0.08em", marginBottom: "4px" }}>GNSN. FART</div>
+              <div style={{ fontSize: "22px", fontFamily: "var(--font-mono)", fontWeight: 700, color: segmentPanel.anomaly ? "#ff4444" : "#ffffff", lineHeight: 1 }}>
+                {segmentPanel.avgSpeedKn} <span style={{ fontSize: "13px", color: "rgba(255,255,255,0.6)", fontWeight: 400 }}>kn</span>
               </div>
             </div>
           </div>
 
           {/* Checksum bar */}
-          <div style={{ marginBottom: "6px" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
-              <span style={{ fontSize: "8px", fontFamily: "var(--font-mono)", color: "rgba(255,255,255,0.45)", letterSpacing: "0.08em" }}>
+          <div>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}>
+              <span style={{ fontSize: "10px", fontFamily: "var(--font-mono)", color: "rgba(255,255,255,0.45)", letterSpacing: "0.06em" }}>
                 CHECKSUM — MAX {segmentPanel.maxSpeedKn} kn
               </span>
               {segmentPanel.anomaly && (
-                <span style={{ fontSize: "8px", fontFamily: "var(--font-mono)", color: "#ff4444", letterSpacing: "0.08em", fontWeight: 700 }}>
+                <span style={{ fontSize: "10px", fontFamily: "var(--font-mono)", color: "#ff4444", letterSpacing: "0.06em", fontWeight: 700 }}>
                   ⚠ ANOMALI
                 </span>
               )}
             </div>
-            <div style={{ height: "6px", background: "rgba(255,255,255,0.1)", borderRadius: "3px", overflow: "hidden" }}>
+            <div style={{ height: "7px", background: "rgba(255,255,255,0.1)", borderRadius: "4px", overflow: "hidden" }}>
               <div style={{
                 height: "100%",
                 width: `${Math.min(100, (segmentPanel.avgSpeedKn / (segmentPanel.maxSpeedKn * 1.5)) * 100)}%`,
                 background: segmentPanel.anomaly
                   ? "linear-gradient(90deg, #ff6b35, #ff4444)"
                   : "linear-gradient(90deg, #00e5ff, #2ba8c8)",
-                borderRadius: "3px",
+                borderRadius: "4px",
                 transition: "width 0.3s ease",
               }} />
             </div>
           </div>
-
-          {/* Hint when A is selected but not B */}
         </div>
       )}
 
@@ -1420,10 +1459,10 @@ export default function MapView({
           backdropFilter: "blur(12px)",
           border: "1px solid rgba(0, 229, 255, 0.35)",
           borderRadius: "8px",
-          padding: "8px 16px",
+          padding: "10px 18px",
           pointerEvents: "none",
         }}>
-          <span style={{ fontSize: "11px", fontFamily: "var(--font-mono)", color: "#00e5ff" }}>
+          <span style={{ fontSize: "13px", fontFamily: "var(--font-mono)", color: "#00e5ff" }}>
             ● A valgt — klik et andet waypoint for at måle
           </span>
         </div>
