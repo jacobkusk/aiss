@@ -488,24 +488,25 @@ export default function MapView({
         ctx.stroke();
         return ctx.getImageData(0, 0, w, h);
       };
-      const makeCircle = (color: string, size: number): ImageData => {
+      const makeCircle = (color: string): ImageData => {
+        const size = 14;
         const c = document.createElement("canvas");
         c.width = size; c.height = size;
         const ctx = c.getContext("2d")!;
         ctx.fillStyle = color;
         ctx.beginPath();
-        ctx.arc(size / 2, size / 2, size / 2 - 1.5, 0, Math.PI * 2);
+        ctx.arc(7, 7, 5, 0, Math.PI * 2);
         ctx.fill();
-        ctx.strokeStyle = "rgba(255,255,255,0.85)";
-        ctx.lineWidth = 1.5;
+        ctx.strokeStyle = "rgba(255,255,255,0.95)";
+        ctx.lineWidth = 2.5;
         ctx.stroke();
         return ctx.getImageData(0, 0, size, size);
       };
       for (const [name, color] of Object.entries(iconColors)) {
         const arrow = makeArrow(color, 12, 20);
         map.addImage(`tri-${name}`, { width: 12, height: 20, data: new Uint8Array(arrow.data.buffer) });
-        const circ = makeCircle(color, 10);
-        map.addImage(`circ-${name}`, { width: 10, height: 10, data: new Uint8Array(circ.data.buffer) });
+        const circ = makeCircle(color);
+        map.addImage(`circ-${name}`, { width: 14, height: 14, data: new Uint8Array(circ.data.buffer) });
       }
       // Orange scrub marker icon
 
@@ -695,6 +696,7 @@ export default function MapView({
           ] as any,
           "icon-size": ["interpolate", ["linear"], ["zoom"], 2, 0.7, 8, 1.1, 14, 1.6] as any,
           "icon-rotate": ["case", uw, ["to-number", ["get", "heading"], 0], 0] as any,
+          "icon-anchor": ["case", uw, "top", "center"] as any,
           "icon-rotation-alignment": "map",
           "icon-allow-overlap": true,
           "icon-ignore-placement": true,
