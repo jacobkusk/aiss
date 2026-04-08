@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, MutableRefObject } from "react";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { supabase } from "@/lib/supabase";
+import { mmsiToFlag } from "@/lib/utils";
 import type { Vessel } from "@/lib/types";
 
 export { OVERLAY_LABELS, DEFAULT_OVERLAYS };
@@ -960,10 +961,10 @@ export default function MapView({
           x: e.point.x, y: e.point.y,
           content: (
             <div>
-              <div style={{ fontSize: "13px", fontWeight: 700, color: "#ffd633", marginBottom: "4px" }}>{timeStr} <span style={{ fontSize: "10px", fontWeight: 400, color: "rgba(255,255,255,0.5)" }}>{dateStr}</span></div>
+              <div style={{ fontSize: "13px", fontWeight: 700, color: "#1a2a3a", marginBottom: "4px" }}>{timeStr}</div>
               <div style={{ display: "flex", gap: "12px" }}>
-                <div><div style={{ fontSize: "8px", color: "rgba(255,255,255,0.4)", letterSpacing: "0.08em" }}>SOG</div><div style={{ fontSize: "12px", fontFamily: "var(--font-mono)", color: "#fff" }}>{speed}</div></div>
-                <div><div style={{ fontSize: "8px", color: "rgba(255,255,255,0.4)", letterSpacing: "0.08em" }}>HDG</div><div style={{ fontSize: "12px", fontFamily: "var(--font-mono)", color: "#fff" }}>{heading}</div></div>
+                <div><div style={{ fontSize: "8px", color: "#8899aa", letterSpacing: "0.08em", textTransform: "uppercase" }}>SOG</div><div style={{ fontSize: "12px", fontFamily: "var(--font-mono)", fontWeight: 600, color: "#1a6b9a" }}>{speed}</div></div>
+                <div><div style={{ fontSize: "8px", color: "#8899aa", letterSpacing: "0.08em", textTransform: "uppercase" }}>HDG</div><div style={{ fontSize: "12px", fontFamily: "var(--font-mono)", fontWeight: 600, color: "#1a6b9a" }}>{heading}</div></div>
               </div>
             </div>
           ),
@@ -1011,19 +1012,21 @@ export default function MapView({
         const f = e.features?.[0];
         if (!f) return;
         const p = f.properties ?? {};
-        const name = p.name || p.ship_name || "Unknown";
-        const speed = p.speed != null ? `${Number(p.speed).toFixed(1)} kn` : "—";
-        const dest = p.destination && p.destination !== "" ? p.destination : null;
+        const name = p.name || p.ship_name || "Unknown Vessel";
+        const flag = mmsiToFlag(Number(p.mmsi));
+        const sog = p.speed != null ? `${Number(p.speed).toFixed(1)} kn` : "—";
+        const cog = p.course != null ? `${Number(p.course).toFixed(0)}°` : "—";
         setHoverTooltipRef.current({
           x: e.point.x, y: e.point.y,
           content: (
             <div>
-              <div style={{ fontSize: "13px", fontWeight: 700, color: "#ffffff", marginBottom: "4px" }}>{name}</div>
-              <div style={{ fontSize: "10px", fontFamily: "var(--font-mono)", color: "rgba(255,255,255,0.5)", marginBottom: dest ? "4px" : 0 }}>MMSI {p.mmsi}</div>
-              {dest && <div style={{ fontSize: "10px", color: "rgba(255,255,255,0.6)", marginBottom: "4px" }}>→ {dest}</div>}
-              <div style={{ display: "flex", gap: "12px", marginTop: "4px" }}>
-                <div><div style={{ fontSize: "8px", color: "rgba(255,255,255,0.4)", letterSpacing: "0.08em" }}>SOG</div><div style={{ fontSize: "12px", fontFamily: "var(--font-mono)", color: "#ffd633" }}>{speed}</div></div>
-                {p.heading != null && p.heading !== 511 && <div><div style={{ fontSize: "8px", color: "rgba(255,255,255,0.4)", letterSpacing: "0.08em" }}>HDG</div><div style={{ fontSize: "12px", fontFamily: "var(--font-mono)", color: "#ffd633" }}>{p.heading}°</div></div>}
+              <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "6px" }}>
+                {flag && <span style={{ fontSize: "16px", lineHeight: 1 }}>{flag}</span>}
+                <span style={{ fontSize: "13px", fontWeight: 700, color: "#1a2a3a" }}>{name}</span>
+              </div>
+              <div style={{ display: "flex", gap: "14px" }}>
+                <div><div style={{ fontSize: "8px", color: "#8899aa", letterSpacing: "0.08em", textTransform: "uppercase" }}>SOG</div><div style={{ fontSize: "12px", fontFamily: "var(--font-mono)", fontWeight: 600, color: "#1a6b9a" }}>{sog}</div></div>
+                <div><div style={{ fontSize: "8px", color: "#8899aa", letterSpacing: "0.08em", textTransform: "uppercase" }}>COG</div><div style={{ fontSize: "12px", fontFamily: "var(--font-mono)", fontWeight: 600, color: "#1a6b9a" }}>{cog}</div></div>
               </div>
             </div>
           ),
@@ -1382,13 +1385,13 @@ export default function MapView({
           left: hoverTooltip.x + 14,
           top: hoverTooltip.y - 10,
           zIndex: 50,
-          background: "rgba(10, 14, 30, 0.95)",
+          background: "rgba(255,255,255,0.97)",
           backdropFilter: "blur(12px)",
-          border: "1px solid rgba(255,255,255,0.12)",
+          border: "1px solid rgba(0,0,0,0.1)",
           borderRadius: "8px",
           padding: "10px 12px",
           pointerEvents: "none",
-          boxShadow: "0 4px 20px rgba(0,0,0,0.5)",
+          boxShadow: "0 4px 20px rgba(0,0,0,0.15)",
         }}>
           {hoverTooltip.content}
         </div>
