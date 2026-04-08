@@ -470,43 +470,46 @@ export default function MapView({
         cargo: "#38b038", tanker: "#c44040", passenger: "#4a90d9",
         fishing: "#d4a017", sailing: "#2ba8c8", special: "#e07020", unknown: "#38b038",
       };
-      // Sharp arrow shape like MarineTraffic — narrow, pointy
+      // Draw at 2× resolution and register with pixelRatio:2 for crisp retina rendering
+      const PR = 2;
       const makeArrow = (color: string, w: number, h: number): ImageData => {
         const c = document.createElement("canvas");
-        c.width = w; c.height = h;
+        c.width = w * PR; c.height = h * PR;
         const ctx = c.getContext("2d")!;
+        ctx.scale(PR, PR);
         ctx.fillStyle = color;
         ctx.beginPath();
-        ctx.moveTo(w / 2, 0);           // tip
-        ctx.lineTo(w - 1, h);           // bottom right
-        ctx.lineTo(w / 2, h * 0.7);     // notch center
-        ctx.lineTo(1, h);               // bottom left
+        ctx.moveTo(w / 2, 0);
+        ctx.lineTo(w - 1, h);
+        ctx.lineTo(w / 2, h * 0.7);
+        ctx.lineTo(1, h);
         ctx.closePath();
         ctx.fill();
         ctx.strokeStyle = "rgba(0,0,0,0.55)";
         ctx.lineWidth = 1;
         ctx.stroke();
-        return ctx.getImageData(0, 0, w, h);
+        return ctx.getImageData(0, 0, w * PR, h * PR);
       };
       const makeCircle = (color: string): ImageData => {
         const size = 14;
         const c = document.createElement("canvas");
-        c.width = size; c.height = size;
+        c.width = size * PR; c.height = size * PR;
         const ctx = c.getContext("2d")!;
+        ctx.scale(PR, PR);
         ctx.fillStyle = color;
         ctx.beginPath();
-        ctx.arc(7, 7, 5, 0, Math.PI * 2);
+        ctx.arc(size / 2, size / 2, size / 2 - 1, 0, Math.PI * 2);
         ctx.fill();
         ctx.strokeStyle = "rgba(0,0,0,0.55)";
         ctx.lineWidth = 1.5;
         ctx.stroke();
-        return ctx.getImageData(0, 0, size, size);
+        return ctx.getImageData(0, 0, size * PR, size * PR);
       };
       for (const [name, color] of Object.entries(iconColors)) {
         const arrow = makeArrow(color, 12, 20);
-        map.addImage(`tri-${name}`, { width: 12, height: 20, data: new Uint8Array(arrow.data.buffer) });
+        map.addImage(`tri-${name}`, { width: 12 * PR, height: 20 * PR, data: new Uint8Array(arrow.data.buffer) }, { pixelRatio: PR });
         const circ = makeCircle(color);
-        map.addImage(`circ-${name}`, { width: 14, height: 14, data: new Uint8Array(circ.data.buffer) });
+        map.addImage(`circ-${name}`, { width: 14 * PR, height: 14 * PR, data: new Uint8Array(circ.data.buffer) }, { pixelRatio: PR });
       }
       // Orange scrub marker icon
 
