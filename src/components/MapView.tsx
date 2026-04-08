@@ -1319,7 +1319,7 @@ export default function MapView({
       {segmentPanel && segmentPanelPx && (
         <div style={{
           position: "absolute",
-          left: segmentPanelPx.x + 22,
+          left: segmentPanelPx.x + 80,
           top: segmentPanelPx.y,
           transform: "translateY(-50%)",
           zIndex: 20,
@@ -1335,7 +1335,18 @@ export default function MapView({
           boxShadow: "0 6px 40px rgba(0,0,0,0.55)",
           pointerEvents: "auto",
         }}>
-          {/* Arrow pointing left toward the segment */}
+          {/* Connector line + arrow pointing left toward the segment */}
+          <div style={{
+            position: "absolute",
+            left: -80,
+            top: "50%",
+            transform: "translateY(-50%)",
+            width: 72,
+            height: 1,
+            background: segmentPanel.anomaly
+              ? "rgba(255,60,60,0.4)"
+              : "rgba(0,229,255,0.3)",
+          }} />
           <div style={{
             position: "absolute",
             left: -8,
@@ -1343,11 +1354,11 @@ export default function MapView({
             transform: "translateY(-50%)",
             width: 0,
             height: 0,
-            borderTop: "8px solid transparent",
-            borderBottom: "8px solid transparent",
+            borderTop: "6px solid transparent",
+            borderBottom: "6px solid transparent",
             borderRight: segmentPanel.anomaly
               ? "8px solid rgba(255,60,60,0.7)"
-              : "8px solid rgba(0,229,255,0.4)",
+              : "8px solid rgba(0,229,255,0.5)",
           }} />
 
           {/* Header */}
