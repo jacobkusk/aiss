@@ -1320,7 +1320,7 @@ export default function MapView({
         <div style={{
           position: "absolute",
           top: "56px",
-          right: "56px",
+          right: "16px",
           zIndex: 20,
           background: "rgba(10, 14, 30, 0.97)",
           backdropFilter: "blur(16px)",
