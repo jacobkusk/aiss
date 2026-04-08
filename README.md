@@ -27,7 +27,7 @@ De tekniske komponenter er kendte: PostGIS, Douglas-Peucker, Merkle-træer, Mult
 
 | Tabel | Type | Formål |
 |---|---|---|
-| `ais_track` | `MultiLineStringM` | Komplet spor per skib, for evigt |
+| `ais_string` | `MultiLineStringM` | Komplet spor per skib, for evigt |
 | `ais_line_events` | append-only | SHA-256 hash-kæde, Bitcoin-forankret |
 | `vessel_readings` | JSONB | Sensordata, schema-fri |
 | `ais_last` | row per MMSI | Seneste position (live prik) |
