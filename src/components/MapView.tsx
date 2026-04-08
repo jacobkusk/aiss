@@ -42,6 +42,44 @@ interface Props {
   onZoomChange?: (zoom: number) => void;
 }
 
+// ── Naval metrics helpers ────────────────────────────────────────────────────
+
+/** Haversine distance in nautical miles between two [lon, lat] points */
+function nmBetween(a: [number, number], b: [number, number]): number {
+  const dLat = (b[1] - a[1]) * Math.PI / 180;
+  const dLon = (b[0] - a[0]) * Math.PI / 180;
+  const lat1 = a[1] * Math.PI / 180;
+  const lat2 = b[1] * Math.PI / 180;
+  const s = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) ** 2;
+  return Math.asin(Math.sqrt(s)) * 2 * 3440.065;
+}
+
+/**
+ * Theoretical max speed for a vessel by AIS ship_type.
+ * Displacement vessels: hull speed ≈ 1.34 × √LWL_ft — without known length
+ * we use conservative type-based upper bounds that flag true anomalies.
+ */
+function estimateMaxSpeed(shipType: number): number {
+  if (shipType >= 36 && shipType <= 37) return 12;  // sailing/pleasure
+  if (shipType >= 30 && shipType <= 35) return 14;  // fishing
+  if (shipType >= 60 && shipType <= 69) return 30;  // passenger / ferry
+  if (shipType >= 70 && shipType <= 79) return 22;  // cargo
+  if (shipType >= 80 && shipType <= 89) return 16;  // tanker
+  if (shipType >= 40 && shipType <= 49) return 50;  // high-speed craft
+  if (shipType >= 50 && shipType <= 59) return 20;  // tug / special
+  return 25; // unknown / other
+}
+
+function formatDuration(ms: number): string {
+  const totalMin = Math.round(ms / 60_000);
+  const h = Math.floor(totalMin / 60);
+  const m = totalMin % 60;
+  if (h === 0) return `${m}m`;
+  return `${h}t ${m}m`;
+}
+
+// ── Position prediction ───────────────────────────────────────────────────────
+
 // Predict position based on COG and SOG
 function predictedPosition(lon: number, lat: number, cogDeg: number, sogKn: number, hoursAhead = 0.5): [number, number] {
   const R = 3440.065;
@@ -213,6 +251,23 @@ export default function MapView({
   const measureMarkersRef = useRef<maplibregl.Marker[]>([]);
   const [measureDistance, setMeasureDistance] = useState<{ nm: number; km: number } | null>(null);
 
+  // Segment analysis
+  type SegmentPanel = {
+    a: any; b: any;
+    distNm: number; distKm: number;
+    timeMs: number; avgSpeedKn: number;
+    maxSpeedKn: number; anomaly: boolean;
+  };
+  const [segmentPanel, setSegmentPanel] = useState<SegmentPanel | null>(null);
+  const segmentPanelSetRef = useRef(setSegmentPanel);
+  segmentPanelSetRef.current = setSegmentPanel;
+  const [waypointASelected, setWaypointASelected] = useState(false);
+  const setWaypointASelectedRef = useRef(setWaypointASelected);
+  setWaypointASelectedRef.current = setWaypointASelected;
+  const waypointARef = useRef<any>(null);
+  const filteredWaypointsRef = useRef<any[]>([]);
+  const selectedShipTypeRef = useRef<number>(0);
+
   const onVesselsUpdateRef = useRef(onVesselsUpdate);
   const onVesselClickRef = useRef(onVesselClick);
   const onRouteCountUpdateRef = useRef(onRouteCountUpdate);
@@ -271,6 +326,8 @@ export default function MapView({
       const t = f.properties?.recorded_at;
       return t && t >= windowStart && t <= cutoff;
     });
+    // Store for segment analysis click handler
+    filteredWaypointsRef.current = filteredWaypoints;
 
     // Build track: all shape lines + waypoint dots
     const trackFeatures: GeoJSON.Feature[] = [];
@@ -282,14 +339,6 @@ export default function MapView({
 
     // Add raw waypoints as line — split where implied speed is physically impossible
     const MAX_KNOTS = 60; // fastest vessels ~50 knots, 60 gives small margin
-    const nmBetween = (a: [number, number], b: [number, number]) => {
-      const dLat = (b[1] - a[1]) * Math.PI / 180;
-      const dLon = (b[0] - a[0]) * Math.PI / 180;
-      const lat1 = a[1] * Math.PI / 180;
-      const lat2 = b[1] * Math.PI / 180;
-      const s = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) ** 2;
-      return Math.asin(Math.sqrt(s)) * 2 * 3440.065;
-    };
     const rawPts: [number, number][] = filteredWaypoints.map((f: any) => f.geometry.coordinates);
     const rawTimes: number[] = filteredWaypoints.map((f: any) => new Date(f.properties?.recorded_at).getTime());
     let seg: [number, number][] = [];
@@ -565,6 +614,14 @@ export default function MapView({
         type: "geojson",
         data: { type: "FeatureCollection", features: [] },
       });
+      map.addSource("segment-highlight", {
+        type: "geojson",
+        data: { type: "FeatureCollection", features: [] },
+      });
+      map.addSource("waypoint-markers", {
+        type: "geojson",
+        data: { type: "FeatureCollection", features: [] },
+      });
       map.addSource("openseamap", {
         type: "raster",
         tiles: ["https://tiles.openseamap.org/seamark/{z}/{x}/{y}.png"],
@@ -645,6 +702,46 @@ export default function MapView({
           "circle-opacity": 0.9,
           "circle-stroke-width": 1,
           "circle-stroke-color": "rgba(0,0,0,0.4)",
+        },
+      });
+
+      // Segment highlight (cyan line between two selected waypoints)
+      map.addLayer({
+        id: "segment-highlight-line",
+        type: "line",
+        source: "segment-highlight",
+        paint: {
+          "line-color": "#00e5ff",
+          "line-width": 5,
+          "line-opacity": 0.95,
+        },
+      });
+      // Waypoint A marker (cyan)
+      map.addLayer({
+        id: "waypoint-a-marker",
+        type: "circle",
+        source: "waypoint-markers",
+        filter: ["==", ["get", "role"], "A"],
+        paint: {
+          "circle-radius": 9,
+          "circle-color": "#00e5ff",
+          "circle-opacity": 1,
+          "circle-stroke-width": 2,
+          "circle-stroke-color": "#ffffff",
+        },
+      });
+      // Waypoint B marker (orange)
+      map.addLayer({
+        id: "waypoint-b-marker",
+        type: "circle",
+        source: "waypoint-markers",
+        filter: ["==", ["get", "role"], "B"],
+        paint: {
+          "circle-radius": 9,
+          "circle-color": "#ff6b35",
+          "circle-opacity": 1,
+          "circle-stroke-width": 2,
+          "circle-stroke-color": "#ffffff",
         },
       });
 
@@ -808,6 +905,12 @@ export default function MapView({
         if (e.features?.[0]) {
           const p = e.features[0].properties;
           const mmsi = p.mmsi;
+          selectedShipTypeRef.current = p.ship_type ?? 0;
+          // Clear any previous segment analysis when switching vessel
+          waypointARef.current = null;
+          setWaypointASelectedRef.current(false);
+          segmentPanelSetRef.current(null);
+
           onVesselClickRef.current({
             mmsi,
             ship_name: p.name ?? p.ship_name,
@@ -832,10 +935,115 @@ export default function MapView({
         }
       });
 
+      // Click on waypoint dot — segment analysis (first click = A, second click = B)
+      map.on("click", "selected-track-dots", (e) => {
+        if (measureActiveRef.current) return;
+        e.originalEvent.stopPropagation();
+        const raw = e.features?.[0];
+        if (!raw) return;
+        // Convert MapLibre feature to plain GeoJSON (MapLibre features have extra internal fields)
+        const f: GeoJSON.Feature = {
+          type: "Feature",
+          geometry: raw.geometry as GeoJSON.Geometry,
+          properties: raw.properties ?? {},
+        };
+
+        const empty: GeoJSON.FeatureCollection = { type: "FeatureCollection", features: [] };
+        const markerSrc = map.getSource("waypoint-markers") as maplibregl.GeoJSONSource | undefined;
+        const segSrc = map.getSource("segment-highlight") as maplibregl.GeoJSONSource | undefined;
+
+        if (!waypointARef.current) {
+          // First click — set A, clear previous segment
+          waypointARef.current = f;
+          setWaypointASelectedRef.current(true);
+          markerSrc?.setData({
+            type: "FeatureCollection",
+            features: [{ ...f, properties: { ...f.properties, role: "A" } }],
+          });
+          segSrc?.setData(empty);
+          segmentPanelSetRef.current(null);
+        } else {
+          // Second click — set B, compute segment
+          const wpA = waypointARef.current;
+          const wpB = f;
+          waypointARef.current = null;
+          setWaypointASelectedRef.current(false);
+
+          const tA = wpA.properties?.recorded_at ?? "";
+          const tB = wpB.properties?.recorded_at ?? "";
+          const [first, second] = tA <= tB ? [wpA, wpB] : [wpB, wpA];
+          const tFirst: string = first.properties?.recorded_at;
+          const tSecond: string = second.properties?.recorded_at;
+
+          // Get all waypoints in the segment
+          const all = filteredWaypointsRef.current;
+          const segment = all.filter((w: any) => {
+            const t = w.properties?.recorded_at;
+            return t && t >= tFirst && t <= tSecond;
+          });
+
+          // Cumulative distance along track
+          let distNm = 0;
+          for (let i = 1; i < segment.length; i++) {
+            distNm += nmBetween(
+              segment[i - 1].geometry.coordinates as [number, number],
+              segment[i].geometry.coordinates as [number, number],
+            );
+          }
+          const distKm = distNm * 1.852;
+
+          // Time elapsed
+          const timeMs = new Date(tSecond).getTime() - new Date(tFirst).getTime();
+          const timeHrs = timeMs / 3_600_000;
+
+          // Average speed over segment
+          const avgSpeedKn = timeHrs > 0 ? distNm / timeHrs : 0;
+
+          // Theoretical max speed based on vessel type
+          const maxSpeedKn = estimateMaxSpeed(selectedShipTypeRef.current);
+          const anomaly = avgSpeedKn > maxSpeedKn * 1.15; // 15% tolerance
+
+          // Highlight segment on map
+          if (segment.length >= 2) {
+            segSrc?.setData({
+              type: "FeatureCollection",
+              features: [{
+                type: "Feature",
+                properties: {},
+                geometry: { type: "LineString", coordinates: segment.map((w: any) => w.geometry.coordinates) },
+              }],
+            });
+          }
+
+          // Place A + B markers
+          markerSrc?.setData({
+            type: "FeatureCollection",
+            features: [
+              { ...first, properties: { ...first.properties, role: "A" } },
+              { ...second, properties: { ...second.properties, role: "B" } },
+            ],
+          });
+
+          // Show stats panel
+          segmentPanelSetRef.current({
+            a: first, b: second,
+            distNm: Math.round(distNm * 10) / 10,
+            distKm: Math.round(distKm * 10) / 10,
+            timeMs,
+            avgSpeedKn: Math.round(avgSpeedKn * 10) / 10,
+            maxSpeedKn,
+            anomaly,
+          });
+        }
+      });
+
+      map.on("mouseenter", "selected-track-dots", () => { map.getCanvas().style.cursor = "crosshair"; });
+      map.on("mouseleave", "selected-track-dots", () => { map.getCanvas().style.cursor = ""; });
+
       // Click on empty map — clear selection
       map.on("click", (e) => {
         if (measureActiveRef.current) return;
-        const vessels = map.queryRenderedFeatures(e.point, { layers: ["ais-vessels", "clusters"] });
+        const vessels = map.queryRenderedFeatures(e.point, { layers: ["ais-vessels", "clusters", "selected-track-dots"] });
         if (!vessels.length) {
           // Clear all track layers
           trackFeaturesRef.current = [];
@@ -846,6 +1054,11 @@ export default function MapView({
           if (trackSrc) trackSrc.setData(empty);
           if (ghostSrc) ghostSrc.setData(empty);
           if (scrubPosSrc) scrubPosSrc.setData(empty);
+          (map.getSource("segment-highlight") as maplibregl.GeoJSONSource | undefined)?.setData(empty);
+          (map.getSource("waypoint-markers") as maplibregl.GeoJSONSource | undefined)?.setData(empty);
+          waypointARef.current = null;
+          setWaypointASelectedRef.current(false);
+          segmentPanelSetRef.current(null);
         }
       });
 
@@ -1076,6 +1289,143 @@ export default function MapView({
               Ryd
             </button>
           )}
+        </div>
+      )}
+
+      {/* Segment analysis panel */}
+      {segmentPanel && (
+        <div style={{
+          position: "absolute",
+          bottom: "90px",
+          left: "50%",
+          transform: "translateX(-50%)",
+          zIndex: 20,
+          background: "rgba(10, 14, 30, 0.97)",
+          backdropFilter: "blur(16px)",
+          border: segmentPanel.anomaly
+            ? "1px solid rgba(255, 60, 60, 0.7)"
+            : "1px solid rgba(0, 229, 255, 0.35)",
+          borderRadius: "12px",
+          padding: "14px 18px",
+          minWidth: "280px",
+          maxWidth: "340px",
+          boxShadow: "0 4px 32px rgba(0,0,0,0.45)",
+        }}>
+          {/* Header */}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+            <span style={{ fontSize: "9px", fontFamily: "var(--font-mono)", color: "rgba(255,255,255,0.5)", letterSpacing: "0.1em" }}>
+              SEGMENT ANALYSE
+            </span>
+            <button
+              onClick={() => {
+                setSegmentPanel(null);
+                waypointARef.current = null;
+                setWaypointASelected(false);
+                const empty: GeoJSON.FeatureCollection = { type: "FeatureCollection", features: [] };
+                (mapRef.current?.getSource("segment-highlight") as any)?.setData(empty);
+                (mapRef.current?.getSource("waypoint-markers") as any)?.setData(empty);
+              }}
+              style={{ fontSize: "12px", color: "rgba(255,255,255,0.5)", background: "transparent", border: "none", cursor: "pointer", padding: "0 0 0 8px", lineHeight: 1 }}
+            >✕</button>
+          </div>
+
+          {/* From / To */}
+          <div style={{ display: "flex", gap: "8px", marginBottom: "12px" }}>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: "8px", fontFamily: "var(--font-mono)", color: "#00e5ff", letterSpacing: "0.08em", marginBottom: "3px" }}>FRA ●</div>
+              <div style={{ fontSize: "11px", fontFamily: "var(--font-mono)", color: "rgba(255,255,255,0.85)" }}>
+                {new Date(segmentPanel.a.properties?.recorded_at).toLocaleTimeString("da-DK", { hour: "2-digit", minute: "2-digit" })}
+              </div>
+              <div style={{ fontSize: "9px", fontFamily: "var(--font-mono)", color: "rgba(255,255,255,0.45)" }}>
+                {new Date(segmentPanel.a.properties?.recorded_at).toLocaleDateString("da-DK", { day: "2-digit", month: "short" })}
+              </div>
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: "8px", fontFamily: "var(--font-mono)", color: "#ff6b35", letterSpacing: "0.08em", marginBottom: "3px" }}>TIL ●</div>
+              <div style={{ fontSize: "11px", fontFamily: "var(--font-mono)", color: "rgba(255,255,255,0.85)" }}>
+                {new Date(segmentPanel.b.properties?.recorded_at).toLocaleTimeString("da-DK", { hour: "2-digit", minute: "2-digit" })}
+              </div>
+              <div style={{ fontSize: "9px", fontFamily: "var(--font-mono)", color: "rgba(255,255,255,0.45)" }}>
+                {new Date(segmentPanel.b.properties?.recorded_at).toLocaleDateString("da-DK", { day: "2-digit", month: "short" })}
+              </div>
+            </div>
+            <div style={{ flex: 1, textAlign: "right" }}>
+              <div style={{ fontSize: "8px", fontFamily: "var(--font-mono)", color: "rgba(255,255,255,0.45)", letterSpacing: "0.08em", marginBottom: "3px" }}>TID</div>
+              <div style={{ fontSize: "11px", fontFamily: "var(--font-mono)", color: "rgba(255,255,255,0.85)" }}>
+                {formatDuration(segmentPanel.timeMs)}
+              </div>
+            </div>
+          </div>
+
+          {/* Divider */}
+          <div style={{ borderTop: "1px solid rgba(255,255,255,0.08)", marginBottom: "12px" }} />
+
+          {/* Distance + Speed */}
+          <div style={{ display: "flex", gap: "8px", marginBottom: "10px" }}>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: "8px", fontFamily: "var(--font-mono)", color: "rgba(255,255,255,0.45)", letterSpacing: "0.08em", marginBottom: "2px" }}>AFSTAND</div>
+              <div style={{ fontSize: "18px", fontFamily: "var(--font-mono)", fontWeight: 700, color: "#ffffff", lineHeight: 1 }}>
+                {segmentPanel.distNm} <span style={{ fontSize: "11px", color: "rgba(255,255,255,0.6)", fontWeight: 400 }}>nm</span>
+              </div>
+              <div style={{ fontSize: "11px", fontFamily: "var(--font-mono)", color: "rgba(255,255,255,0.45)", marginTop: "2px" }}>
+                {segmentPanel.distKm} km
+              </div>
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: "8px", fontFamily: "var(--font-mono)", color: "rgba(255,255,255,0.45)", letterSpacing: "0.08em", marginBottom: "2px" }}>GNSN. FART</div>
+              <div style={{ fontSize: "18px", fontFamily: "var(--font-mono)", fontWeight: 700, color: segmentPanel.anomaly ? "#ff4444" : "#ffffff", lineHeight: 1 }}>
+                {segmentPanel.avgSpeedKn} <span style={{ fontSize: "11px", color: "rgba(255,255,255,0.6)", fontWeight: 400 }}>kn</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Checksum bar */}
+          <div style={{ marginBottom: "6px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
+              <span style={{ fontSize: "8px", fontFamily: "var(--font-mono)", color: "rgba(255,255,255,0.45)", letterSpacing: "0.08em" }}>
+                CHECKSUM — MAX {segmentPanel.maxSpeedKn} kn
+              </span>
+              {segmentPanel.anomaly && (
+                <span style={{ fontSize: "8px", fontFamily: "var(--font-mono)", color: "#ff4444", letterSpacing: "0.08em", fontWeight: 700 }}>
+                  ⚠ ANOMALI
+                </span>
+              )}
+            </div>
+            <div style={{ height: "6px", background: "rgba(255,255,255,0.1)", borderRadius: "3px", overflow: "hidden" }}>
+              <div style={{
+                height: "100%",
+                width: `${Math.min(100, (segmentPanel.avgSpeedKn / (segmentPanel.maxSpeedKn * 1.5)) * 100)}%`,
+                background: segmentPanel.anomaly
+                  ? "linear-gradient(90deg, #ff6b35, #ff4444)"
+                  : "linear-gradient(90deg, #00e5ff, #2ba8c8)",
+                borderRadius: "3px",
+                transition: "width 0.3s ease",
+              }} />
+            </div>
+          </div>
+
+          {/* Hint when A is selected but not B */}
+        </div>
+      )}
+
+      {/* Hint: first waypoint selected, waiting for second */}
+      {waypointASelected && !segmentPanel && (
+        <div style={{
+          position: "absolute",
+          bottom: "90px",
+          left: "50%",
+          transform: "translateX(-50%)",
+          zIndex: 20,
+          background: "rgba(10, 14, 30, 0.92)",
+          backdropFilter: "blur(12px)",
+          border: "1px solid rgba(0, 229, 255, 0.35)",
+          borderRadius: "8px",
+          padding: "8px 16px",
+          pointerEvents: "none",
+        }}>
+          <span style={{ fontSize: "11px", fontFamily: "var(--font-mono)", color: "#00e5ff" }}>
+            ● A valgt — klik et andet waypoint for at måle
+          </span>
         </div>
       )}
 
