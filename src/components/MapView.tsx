@@ -245,6 +245,12 @@ export default function MapView({
   const fetchVesselsRef = useRef<(() => void) | null>(null);
   const trackFeaturesRef = useRef<GeoJSON.Feature[]>([]);
 
+  // Hover tooltips
+  type HoverTooltip = { x: number; y: number; content: React.ReactNode };
+  const [hoverTooltip, setHoverTooltip] = useState<HoverTooltip | null>(null);
+  const setHoverTooltipRef = useRef(setHoverTooltip);
+  setHoverTooltipRef.current = setHoverTooltip;
+
   // Measurement tool
   const [measureActive, setMeasureActive] = useState(false);
   const measureActiveRef = useRef(false);
@@ -940,8 +946,33 @@ export default function MapView({
         }
       });
 
-      map.on("mouseenter", "selected-track-dots-hitarea", () => { map.getCanvas().style.cursor = "crosshair"; });
-      map.on("mouseleave", "selected-track-dots-hitarea", () => { map.getCanvas().style.cursor = ""; });
+      map.on("mouseenter", "selected-track-dots-hitarea", (e) => {
+        map.getCanvas().style.cursor = "crosshair";
+        const f = e.features?.[0];
+        if (!f) return;
+        const p = f.properties ?? {};
+        const t = p.recorded_at ? new Date(p.recorded_at) : null;
+        const timeStr = t ? t.toLocaleTimeString("da-DK", { hour: "2-digit", minute: "2-digit" }) : "—";
+        const dateStr = t ? t.toLocaleDateString("da-DK", { day: "numeric", month: "short" }) : "";
+        const speed = p.speed != null ? `${Number(p.speed).toFixed(1)} kn` : "—";
+        const heading = p.heading != null && p.heading !== 511 ? `${p.heading}°` : "—";
+        setHoverTooltipRef.current({
+          x: e.point.x, y: e.point.y,
+          content: (
+            <div>
+              <div style={{ fontSize: "13px", fontWeight: 700, color: "#ffd633", marginBottom: "4px" }}>{timeStr} <span style={{ fontSize: "10px", fontWeight: 400, color: "rgba(255,255,255,0.5)" }}>{dateStr}</span></div>
+              <div style={{ display: "flex", gap: "12px" }}>
+                <div><div style={{ fontSize: "8px", color: "rgba(255,255,255,0.4)", letterSpacing: "0.08em" }}>SOG</div><div style={{ fontSize: "12px", fontFamily: "var(--font-mono)", color: "#fff" }}>{speed}</div></div>
+                <div><div style={{ fontSize: "8px", color: "rgba(255,255,255,0.4)", letterSpacing: "0.08em" }}>HDG</div><div style={{ fontSize: "12px", fontFamily: "var(--font-mono)", color: "#fff" }}>{heading}</div></div>
+              </div>
+            </div>
+          ),
+        });
+      });
+      map.on("mouseleave", "selected-track-dots-hitarea", () => {
+        map.getCanvas().style.cursor = "";
+        setHoverTooltipRef.current(null);
+      });
 
       // Click on empty map — clear selection (fires after all layer-specific handlers)
       map.on("click", () => {
@@ -975,11 +1006,36 @@ export default function MapView({
       // Hover
       map.on("mouseenter", "clusters", () => { map.getCanvas().style.cursor = "pointer"; });
       map.on("mouseleave", "clusters", () => { map.getCanvas().style.cursor = ""; });
-      map.on("mouseenter", "ais-vessels", () => {
+      map.on("mouseenter", "ais-vessels", (e) => {
         map.getCanvas().style.cursor = "pointer";
+        const f = e.features?.[0];
+        if (!f) return;
+        const p = f.properties ?? {};
+        const name = p.name || p.ship_name || "Unknown";
+        const speed = p.speed != null ? `${Number(p.speed).toFixed(1)} kn` : "—";
+        const dest = p.destination && p.destination !== "" ? p.destination : null;
+        setHoverTooltipRef.current({
+          x: e.point.x, y: e.point.y,
+          content: (
+            <div>
+              <div style={{ fontSize: "13px", fontWeight: 700, color: "#ffffff", marginBottom: "4px" }}>{name}</div>
+              <div style={{ fontSize: "10px", fontFamily: "var(--font-mono)", color: "rgba(255,255,255,0.5)", marginBottom: dest ? "4px" : 0 }}>MMSI {p.mmsi}</div>
+              {dest && <div style={{ fontSize: "10px", color: "rgba(255,255,255,0.6)", marginBottom: "4px" }}>→ {dest}</div>}
+              <div style={{ display: "flex", gap: "12px", marginTop: "4px" }}>
+                <div><div style={{ fontSize: "8px", color: "rgba(255,255,255,0.4)", letterSpacing: "0.08em" }}>SOG</div><div style={{ fontSize: "12px", fontFamily: "var(--font-mono)", color: "#ffd633" }}>{speed}</div></div>
+                {p.heading != null && p.heading !== 511 && <div><div style={{ fontSize: "8px", color: "rgba(255,255,255,0.4)", letterSpacing: "0.08em" }}>HDG</div><div style={{ fontSize: "12px", fontFamily: "var(--font-mono)", color: "#ffd633" }}>{p.heading}°</div></div>}
+              </div>
+            </div>
+          ),
+        });
+      });
+      map.on("mousemove", "ais-vessels", (e) => {
+        if (!e.features?.[0]) return;
+        setHoverTooltipRef.current(prev => prev ? { ...prev, x: e.point.x, y: e.point.y } : prev);
       });
       map.on("mouseleave", "ais-vessels", () => {
         map.getCanvas().style.cursor = "";
+        setHoverTooltipRef.current(null);
       });
 
       // Track zoom level
@@ -1316,6 +1372,25 @@ export default function MapView({
               }} />
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Hover tooltip */}
+      {hoverTooltip && (
+        <div style={{
+          position: "absolute",
+          left: hoverTooltip.x + 14,
+          top: hoverTooltip.y - 10,
+          zIndex: 50,
+          background: "rgba(10, 14, 30, 0.95)",
+          backdropFilter: "blur(12px)",
+          border: "1px solid rgba(255,255,255,0.12)",
+          borderRadius: "8px",
+          padding: "10px 12px",
+          pointerEvents: "none",
+          boxShadow: "0 4px 20px rgba(0,0,0,0.5)",
+        }}>
+          {hoverTooltip.content}
         </div>
       )}
 
