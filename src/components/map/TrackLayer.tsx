@@ -185,7 +185,7 @@ export default function TrackLayer({ selectedMmsi, onClear, onHover }: Props) {
       const geojson = typeof data === "string" ? JSON.parse(data) : data;
 
       const points: GeoJSON.Feature[] = (geojson.features ?? []).filter(
-        (f: GeoJSON.Feature) => f.geometry?.type === "Point"
+        (f: GeoJSON.Feature) => f.geometry?.type === "Point" && (f.properties as any)?.mmsi != null
       );
 
       points.sort((a: GeoJSON.Feature, b: GeoJSON.Feature) => {
