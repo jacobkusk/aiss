@@ -51,7 +51,6 @@ export default function TrackLayer({ selectedMmsi, onClear, onHover }: Props) {
 
     const empty: GeoJSON.FeatureCollection = { type: "FeatureCollection", features: [] };
     map.addSource(SOURCE, { type: "geojson", data: empty });
-    loadArrowImage(map);
 
     map.addLayer({
       id: LAYER_LINE,
@@ -123,22 +122,24 @@ export default function TrackLayer({ selectedMmsi, onClear, onHover }: Props) {
       },
     });
 
-    // Arrow on first/last waypoint — sharp SVG SDF icon rotated to COG
-    map.addLayer({
-      id: LAYER_ARROW,
-      type: "symbol",
-      source: SOURCE,
-      filter: ["==", ["get", "is_endpoint"], true],
-      layout: {
-        "icon-image": ARROW_IMAGE,
-        "icon-size": 1,
-        "icon-rotate": ["get", "course"],
-        "icon-rotation-alignment": "map",
-        "icon-offset": [["get", "offset_x"], ["get", "offset_y"]],
-        "icon-allow-overlap": true,
-        "icon-ignore-placement": true,
-      },
-      paint: { "icon-color": "#2ba8c8", "icon-opacity": 0.9 },
+    // Arrow — load SVG image first, then add layer
+    loadArrowImage(map).then(() => {
+      if (!map.getSource(SOURCE)) return;
+      map.addLayer({
+        id: LAYER_ARROW,
+        type: "symbol",
+        source: SOURCE,
+        filter: ["==", ["get", "is_endpoint"], 1],
+        layout: {
+          "icon-image": ARROW_IMAGE,
+          "icon-size": 1,
+          "icon-rotate": ["get", "course"],
+          "icon-rotation-alignment": "map",
+          "icon-allow-overlap": true,
+          "icon-ignore-placement": true,
+        },
+        paint: { "icon-color": "#2ba8c8", "icon-opacity": 0.9 },
+      });
     });
 
     // Click empty area → clear
@@ -227,23 +228,18 @@ export default function TrackLayer({ selectedMmsi, onClear, onHover }: Props) {
           geometry: { type: "LineString", coordinates: lineCoords },
           properties: { type: "line" },
         });
-        // Arrow features — pixel offset in COG direction (zoom-independent)
-        const D = 20; // px outside the ring
+        // Arrow features — placed outside the ring in COG direction
         for (const [i, pt] of [[0, points[0]], [1, points[points.length - 1]]] as [number, GeoJSON.Feature][]) {
           const course = (pt.properties as any)?.course;
           if (course == null) continue;
-          const rad = (Number(course) * Math.PI) / 180;
+          const [lon, lat] = (pt.geometry as GeoJSON.Point).coordinates;
           // First: behind (reverse COG), Last: ahead (COG direction)
-          const sign = i === 0 ? -1 : 1;
+          const bearing = i === 0 ? (Number(course) + 180) % 360 : Number(course);
+          const [olon, olat] = geoOffset(lon, lat, bearing, 0.0025);
           features.push({
             type: "Feature",
-            geometry: pt.geometry,
-            properties: {
-              is_endpoint: true,
-              course: Number(course),
-              offset_x: sign * Math.sin(rad) * D,
-              offset_y: sign * -Math.cos(rad) * D,
-            },
+            geometry: { type: "Point", coordinates: [olon, olat] },
+            properties: { is_endpoint: 1, course: Number(course) },
           });
         }
       }
