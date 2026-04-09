@@ -12,12 +12,22 @@ const LAYER_SOG = "track-sog";
 const LAYER_COG = "track-cog";
 const LAYER_CHEVRON = "track-chevron";
 
-// Compute geographic position offset in COG direction (stable in map space)
-function cogOffset(lon: number, lat: number, bearingDeg: number, distDeg = 0.00022): [number, number] {
+function geoOffset(lon: number, lat: number, bearingDeg: number, distDeg: number): [number, number] {
   const rad = (bearingDeg * Math.PI) / 180;
-  const newLat = lat + distDeg * Math.cos(rad);
-  const newLon = lon + distDeg * Math.sin(rad) / Math.cos((lat * Math.PI) / 180);
-  return [newLon, newLat];
+  return [
+    lon + distDeg * Math.sin(rad) / Math.cos((lat * Math.PI) / 180),
+    lat + distDeg * Math.cos(rad),
+  ];
+}
+
+function makeChevron(lon: number, lat: number, bearingDeg: number): GeoJSON.Feature {
+  const [plon, plat] = geoOffset(lon, lat, bearingDeg, 0.00020);
+  return {
+    type: "Feature",
+    geometry: { type: "Point", coordinates: [plon, plat] },
+    // ▶ points east (90°), so rotate by bearing - 90 to align with COG
+    properties: { type: "chevron", bearing: (bearingDeg - 90 + 360) % 360 },
+  };
 }
 
 interface WaypointHover { x: number; y: number; mmsi: number | null; speed: number | null; course: number | null; heading: number | null; recorded_at: string | null; lat: number; lon: number; }
@@ -111,43 +121,23 @@ export default function TrackLayer({ selectedMmsi, onClear, onHover }: Props) {
       },
     });
 
-    // Draw chevron arrow as SDF image (canvas-based, tintable)
-    const SIZE = 24;
-    const canvas = document.createElement("canvas");
-    canvas.width = SIZE; canvas.height = SIZE;
-    const ctx = canvas.getContext("2d")!;
-    ctx.strokeStyle = "#ffffff";
-    ctx.lineWidth = 3;
-    ctx.lineJoin = "round";
-    ctx.lineCap = "round";
-    ctx.beginPath();
-    ctx.moveTo(4, 18);
-    ctx.lineTo(12, 6);
-    ctx.lineTo(20, 18);
-    ctx.stroke();
-    const imgData = ctx.getImageData(0, 0, SIZE, SIZE);
-    if (!map.hasImage("chevron-arrow")) {
-      map.addImage("chevron-arrow", imgData, { sdf: true });
-    }
-
-    // Chevron — pre-computed geographic position, icon rotated to bearing
+    // Chevron — font SDF unicode arrow at pre-computed geographic position
     map.addLayer({
       id: LAYER_CHEVRON,
       type: "symbol",
       source: SOURCE,
       filter: ["==", ["get", "type"], "chevron"],
       layout: {
-        "icon-image": "chevron-arrow",
-        "icon-size": 1.2,
-        "icon-anchor": "center",
-        "icon-rotate": ["get", "bearing"],
-        "icon-rotation-alignment": "map",
-        "icon-allow-overlap": true,
-        "icon-ignore-placement": true,
+        "text-field": "▶",
+        "text-size": 14,
+        "text-rotate": ["get", "bearing"],
+        "text-rotation-alignment": "map",
+        "text-allow-overlap": true,
+        "text-ignore-placement": true,
       },
       paint: {
-        "icon-color": "#2ba8c8",
-        "icon-opacity": 0.9,
+        "text-color": "#2ba8c8",
+        "text-opacity": 0.9,
       },
     });
 
@@ -241,16 +231,12 @@ export default function TrackLayer({ selectedMmsi, onClear, onHover }: Props) {
           properties: { type: "line" },
         });
 
-        // Chevrons at geographic offset from first and last waypoint
+        // Chevrons as LineString vector geometry at first and last waypoint
         for (const pt of [points[0], points[points.length - 1]]) {
           const course = (pt.properties as any)?.course;
           if (course == null) continue;
           const [lon, lat] = (pt.geometry as GeoJSON.Point).coordinates;
-          features.push({
-            type: "Feature",
-            geometry: { type: "Point", coordinates: cogOffset(lon, lat, Number(course)) },
-            properties: { type: "chevron", bearing: Number(course) },
-          });
+          features.push(makeChevron(lon, lat, Number(course)));
         }
       }
 
