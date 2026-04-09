@@ -256,7 +256,7 @@ export default function TrackLayer({ selectedMmsi, onClear, onHover }: Props) {
           endpoints.push({ lon, lat, course: Number(course) });
         }
         endpointsRef.current = endpoints;
-        featuresRef.current = features;
+        featuresRef.current = [...features]; // snapshot without chevrons
 
         const zoom = map.getZoom();
         const chevrons = endpoints.map(({ lon, lat, course }) => makeChevron(lon, lat, course, zoom));
