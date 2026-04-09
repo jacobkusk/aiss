@@ -10,27 +10,6 @@ const LAYER_DOTS = "track-dots";
 const LAYER_RING = "track-rings";
 const LAYER_SOG = "track-sog";
 const LAYER_COG = "track-cog";
-const LAYER_ARROW = "track-arrow";
-const ARROW_IMAGE = "track-arrow-img";
-
-function geoOffset(lon: number, lat: number, bearingDeg: number, distDeg: number): [number, number] {
-  const rad = (bearingDeg * Math.PI) / 180;
-  return [
-    lon + distDeg * Math.sin(rad) / Math.cos((lat * Math.PI) / 180),
-    lat + distDeg * Math.cos(rad),
-  ];
-}
-
-function loadArrowImage(map: maplibregl.Map): Promise<void> {
-  return new Promise((resolve) => {
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">
-      <polyline points="4,20 12,4 20,20" fill="none" stroke="white" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
-    </svg>`;
-    const img = new Image(24, 24);
-    img.onload = () => { map.addImage(ARROW_IMAGE, img, { sdf: true }); resolve(); };
-    img.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
-  });
-}
 
 interface WaypointHover { x: number; y: number; mmsi: number | null; speed: number | null; course: number | null; heading: number | null; recorded_at: string | null; lat: number; lon: number; }
 
@@ -44,7 +23,6 @@ export default function TrackLayer({ selectedMmsi, onClear, onHover }: Props) {
   const map = useMap();
   const initializedRef = useRef(false);
 
-  // Initialize layers once
   useEffect(() => {
     if (!map || initializedRef.current) return;
     initializedRef.current = true;
@@ -122,27 +100,6 @@ export default function TrackLayer({ selectedMmsi, onClear, onHover }: Props) {
       },
     });
 
-    // Arrow — load SVG image first, then add layer
-    loadArrowImage(map).then(() => {
-      if (!map.getSource(SOURCE)) return;
-      map.addLayer({
-        id: LAYER_ARROW,
-        type: "symbol",
-        source: SOURCE,
-        filter: ["==", ["get", "is_endpoint"], 1],
-        layout: {
-          "icon-image": ARROW_IMAGE,
-          "icon-size": 1,
-          "icon-rotate": ["get", "course"],
-          "icon-rotation-alignment": "map",
-          "icon-allow-overlap": true,
-          "icon-ignore-placement": true,
-        },
-        paint: { "icon-color": "#2ba8c8", "icon-opacity": 0.9 },
-      });
-    });
-
-    // Click empty area → clear
     const handleClick = (e: maplibregl.MapMouseEvent) => {
       const hit = map.queryRenderedFeatures(e.point, { layers: ["vessel-dots"] });
       if (!hit.length) {
@@ -183,7 +140,7 @@ export default function TrackLayer({ selectedMmsi, onClear, onHover }: Props) {
       map.off("mouseleave", LAYER_DOTS, handleWpLeave);
       map.off("mousemove", LAYER_RING, handleWpMove);
       map.off("mouseleave", LAYER_RING, handleWpLeave);
-      [LAYER_ARROW, LAYER_COG, LAYER_SOG, LAYER_RING, LAYER_DOTS, LAYER_LINE].forEach((id) => {
+      [LAYER_COG, LAYER_SOG, LAYER_RING, LAYER_DOTS, LAYER_LINE].forEach((id) => {
         if (map.getLayer(id)) map.removeLayer(id);
       });
       if (map.getSource(SOURCE)) map.removeSource(SOURCE);
@@ -191,7 +148,6 @@ export default function TrackLayer({ selectedMmsi, onClear, onHover }: Props) {
     };
   }, [map]);
 
-  // Fetch track when selectedMmsi changes
   useEffect(() => {
     if (!map || !selectedMmsi) {
       if (map && map.getSource(SOURCE)) {
@@ -205,7 +161,6 @@ export default function TrackLayer({ selectedMmsi, onClear, onHover }: Props) {
         p_mmsi: selectedMmsi,
         p_minutes: 2880,
       });
-      console.log("[track]", selectedMmsi, data?.features?.length ?? 0);
       if (error || !data || !map) return;
 
       const geojson = typeof data === "string" ? JSON.parse(data) : data;
@@ -228,20 +183,6 @@ export default function TrackLayer({ selectedMmsi, onClear, onHover }: Props) {
           geometry: { type: "LineString", coordinates: lineCoords },
           properties: { type: "line" },
         });
-        // Arrow features — placed outside the ring in COG direction
-        for (const [i, pt] of [[0, points[0]], [1, points[points.length - 1]]] as [number, GeoJSON.Feature][]) {
-          const course = (pt.properties as any)?.course;
-          if (course == null) continue;
-          const [lon, lat] = (pt.geometry as GeoJSON.Point).coordinates;
-          // First: behind (reverse COG), Last: ahead (COG direction)
-          const bearing = i === 0 ? (Number(course) + 180) % 360 : Number(course);
-          const [olon, olat] = geoOffset(lon, lat, bearing, 0.0025);
-          features.push({
-            type: "Feature",
-            geometry: { type: "Point", coordinates: [olon, olat] },
-            properties: { is_endpoint: 1, course: Number(course) },
-          });
-        }
       }
 
       (map.getSource(SOURCE) as maplibregl.GeoJSONSource)?.setData({ type: "FeatureCollection", features });
