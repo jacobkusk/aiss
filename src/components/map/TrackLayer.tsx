@@ -44,38 +44,45 @@ function buildGeoJSON(points: GeoJSON.Feature[], timeRange: [number, number] | n
 
   const features: GeoJSON.Feature[] = [...filtered];
 
-  for (let i = 0; i < filtered.length - 1; i++) {
+  // Pass 1 — classify each segment
+  interface Seg { isOutlier: boolean; isGap: boolean; color: string; }
+  const segs: Seg[] = filtered.slice(0, -1).map((_, i) => {
     const from  = (filtered[i].geometry as GeoJSON.Point).coordinates;
     const to    = (filtered[i + 1].geometry as GeoJSON.Point).coordinates;
     const tA    = new Date((filtered[i].properties as any)?.recorded_at).getTime() / 1000;
     const tB    = new Date((filtered[i + 1].properties as any)?.recorded_at).getTime() / 1000;
     const dtSec = tB - tA;
     const isGap = dtSec > GAP_THRESHOLD;
-
     const impliedKn = dtSec > 0 ? (distMeters(from, to) / dtSec) / 0.514444 : 999;
     const isOutlier = impliedKn > OUTLIER_SPEED_KN;
+    const color = (filtered[i + 1].properties as any)?.prediction_color ?? (isGap ? "#00e676" : "#2ba8c8");
+    return { isOutlier, isGap, color };
+  });
 
-    if (isOutlier) {
-      // Physically impossible jump — dashed red
-      features.push({
-        type: "Feature",
-        geometry: { type: "LineString", coordinates: [from, to] },
-        properties: { type: "outlier" },
-      });
-    } else if (isGap) {
-      // Signal gap — dashed in same color as destination waypoint
-      const color = (filtered[i + 1].properties as any)?.prediction_color ?? "#00e676";
-      features.push({
-        type: "Feature",
-        geometry: { type: "LineString", coordinates: [from, to] },
-        properties: { type: "gap", prediction_color: color },
-      });
+  // Pass 2 — emit line features
+  for (let i = 0; i < segs.length; i++) {
+    const from = (filtered[i].geometry as GeoJSON.Point).coordinates;
+    const to   = (filtered[i + 1].geometry as GeoJSON.Point).coordinates;
+    const s    = segs[i];
+    if (s.isOutlier) {
+      features.push({ type: "Feature", geometry: { type: "LineString", coordinates: [from, to] }, properties: { type: "outlier" } });
+    } else if (s.isGap) {
+      features.push({ type: "Feature", geometry: { type: "LineString", coordinates: [from, to] }, properties: { type: "gap", prediction_color: s.color } });
     } else {
-      const color = (filtered[i + 1].properties as any)?.prediction_color ?? "#2ba8c8";
+      features.push({ type: "Feature", geometry: { type: "LineString", coordinates: [from, to] }, properties: { type: "line", prediction_color: s.color } });
+    }
+  }
+
+  // Pass 3 — skip lines: when a point has outlier segments on BOTH sides,
+  // draw a green dashed line directly between the flanking non-outlier points.
+  for (let i = 0; i < segs.length - 1; i++) {
+    if (segs[i].isOutlier && segs[i + 1].isOutlier) {
+      const skipFrom = (filtered[i].geometry as GeoJSON.Point).coordinates;
+      const skipTo   = (filtered[i + 2].geometry as GeoJSON.Point).coordinates;
       features.push({
         type: "Feature",
-        geometry: { type: "LineString", coordinates: [from, to] },
-        properties: { type: "line", prediction_color: color },
+        geometry: { type: "LineString", coordinates: [skipFrom, skipTo] },
+        properties: { type: "gap", prediction_color: "#00e676" },
       });
     }
   }
