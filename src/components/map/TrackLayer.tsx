@@ -20,11 +20,19 @@ function geoOffset(lon: number, lat: number, bearingDeg: number, distDeg: number
   ];
 }
 
-function makeChevron(lon: number, lat: number, bearingDeg: number): GeoJSON.Feature {
-  const apex = geoOffset(lon, lat, bearingDeg, 0.003);
+// Convert target pixels to degrees at a given zoom and latitude
+function pxToDeg(px: number, lat: number, zoom: number): number {
+  const mpp = 156543.03 * Math.cos((lat * Math.PI) / 180) / Math.pow(2, zoom);
+  return (px * mpp) / 111320;
+}
+
+function makeChevron(lon: number, lat: number, bearingDeg: number, zoom: number): GeoJSON.Feature {
+  const apexDist = pxToDeg(18, lat, zoom);
+  const armDist  = pxToDeg(12, lat, zoom);
+  const apex = geoOffset(lon, lat, bearingDeg, apexDist);
   const back = (bearingDeg + 180) % 360;
-  const left  = geoOffset(apex[0], apex[1], (back - 30 + 360) % 360, 0.002);
-  const right = geoOffset(apex[0], apex[1], (back + 30) % 360, 0.002);
+  const left  = geoOffset(apex[0], apex[1], (back - 30 + 360) % 360, armDist);
+  const right = geoOffset(apex[0], apex[1], (back + 30) % 360, armDist);
   return {
     type: "Feature",
     geometry: { type: "LineString", coordinates: [left, apex, right] },
@@ -40,9 +48,13 @@ interface Props {
   onHover: (data: WaypointHover | null) => void;
 }
 
+interface ChevronEndpoint { lon: number; lat: number; course: number; }
+
 export default function TrackLayer({ selectedMmsi, onClear, onHover }: Props) {
   const map = useMap();
   const initializedRef = useRef(false);
+  const endpointsRef = useRef<ChevronEndpoint[]>([]);
+  const featuresRef = useRef<GeoJSON.Feature[]>([]);
 
   // Initialize layers once
   useEffect(() => {
@@ -168,8 +180,20 @@ export default function TrackLayer({ selectedMmsi, onClear, onHover }: Props) {
     map.on("mousemove", LAYER_RING, handleWpMove);
     map.on("mouseleave", LAYER_RING, handleWpLeave);
 
+    const handleZoom = () => {
+      if (!endpointsRef.current.length) return;
+      const zoom = map.getZoom();
+      const chevrons = endpointsRef.current.map(({ lon, lat, course }) =>
+        makeChevron(lon, lat, course, zoom)
+      );
+      const source = map.getSource(SOURCE) as maplibregl.GeoJSONSource | undefined;
+      source?.setData({ type: "FeatureCollection", features: [...featuresRef.current, ...chevrons] });
+    };
+    map.on("zoom", handleZoom);
+
     return () => {
       map.off("click", handleClick);
+      map.off("zoom", handleZoom);
       map.off("mousemove", LAYER_DOTS, handleWpMove);
       map.off("mouseleave", LAYER_DOTS, handleWpLeave);
       map.off("mousemove", LAYER_RING, handleWpMove);
@@ -223,13 +247,20 @@ export default function TrackLayer({ selectedMmsi, onClear, onHover }: Props) {
           properties: { type: "line" },
         });
 
-        // Chevrons as LineString vector geometry at first and last waypoint
+        // Store endpoints for zoom-reactive chevron recomputation
+        const endpoints: ChevronEndpoint[] = [];
         for (const pt of [points[0], points[points.length - 1]]) {
           const course = (pt.properties as any)?.course;
           if (course == null) continue;
           const [lon, lat] = (pt.geometry as GeoJSON.Point).coordinates;
-          features.push(makeChevron(lon, lat, Number(course)));
+          endpoints.push({ lon, lat, course: Number(course) });
         }
+        endpointsRef.current = endpoints;
+        featuresRef.current = features;
+
+        const zoom = map.getZoom();
+        const chevrons = endpoints.map(({ lon, lat, course }) => makeChevron(lon, lat, course, zoom));
+        features.push(...chevrons);
       }
 
       (map.getSource(SOURCE) as maplibregl.GeoJSONSource)?.setData({ type: "FeatureCollection", features });
