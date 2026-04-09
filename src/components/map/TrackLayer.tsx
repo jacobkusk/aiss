@@ -10,6 +10,7 @@ const LAYER_DOTS = "track-dots";
 const LAYER_RING = "track-rings";
 const LAYER_SOG = "track-sog";
 const LAYER_COG = "track-cog";
+const LAYER_GAP = "track-gap";
 
 interface WaypointHover { x: number; y: number; mmsi: number | null; speed: number | null; course: number | null; heading: number | null; recorded_at: string | null; lat: number; lon: number; }
 
@@ -39,6 +40,20 @@ export default function TrackLayer({ selectedMmsi, onClear, onHover }: Props) {
         "line-color": ["coalesce", ["get", "prediction_color"], "#2ba8c8"],
         "line-width": 1.5,
         "line-opacity": 0.7,
+      },
+    });
+
+    // Dashed grey line for signal gaps (>10 min between waypoints)
+    map.addLayer({
+      id: LAYER_GAP,
+      type: "line",
+      source: SOURCE,
+      filter: ["==", ["get", "type"], "gap"],
+      paint: {
+        "line-color": "#666666",
+        "line-width": 1,
+        "line-opacity": 0.6,
+        "line-dasharray": [4, 4],
       },
     });
 
@@ -144,7 +159,7 @@ export default function TrackLayer({ selectedMmsi, onClear, onHover }: Props) {
       map.off("mouseleave", LAYER_DOTS, handleWpLeave);
       map.off("mousemove", LAYER_RING, handleWpMove);
       map.off("mouseleave", LAYER_RING, handleWpLeave);
-      [LAYER_COG, LAYER_SOG, LAYER_RING, LAYER_DOTS, LAYER_LINE].forEach((id) => {
+      [LAYER_COG, LAYER_SOG, LAYER_RING, LAYER_DOTS, LAYER_GAP, LAYER_LINE].forEach((id) => {
         if (map.getLayer(id)) map.removeLayer(id);
       });
       if (map.getSource(SOURCE)) map.removeSource(SOURCE);
@@ -183,17 +198,31 @@ export default function TrackLayer({ selectedMmsi, onClear, onHover }: Props) {
 
       const features: GeoJSON.Feature[] = [...points];
 
-      // Individual segments — each colored by destination waypoint's prediction_color
+      const GAP_THRESHOLD = 600; // 10 minutes in seconds
+
       for (let i = 0; i < points.length - 1; i++) {
-        const from = (points[i].geometry as GeoJSON.Point).coordinates;
-        const to   = (points[i + 1].geometry as GeoJSON.Point).coordinates;
-        const color = (points[i + 1].properties as any)?.prediction_color ?? "#2ba8c8";
-        if (color === "#f44336") continue; // red = segment break, don't draw
-        features.push({
-          type: "Feature",
-          geometry: { type: "LineString", coordinates: [from, to] },
-          properties: { type: "line", prediction_color: color },
-        });
+        const from     = (points[i].geometry as GeoJSON.Point).coordinates;
+        const to       = (points[i + 1].geometry as GeoJSON.Point).coordinates;
+        const tA       = new Date((points[i].properties as any)?.recorded_at).getTime() / 1000;
+        const tB       = new Date((points[i + 1].properties as any)?.recorded_at).getTime() / 1000;
+        const isGap    = (tB - tA) > GAP_THRESHOLD;
+
+        if (isGap) {
+          // Signal gap — dashed grey line
+          features.push({
+            type: "Feature",
+            geometry: { type: "LineString", coordinates: [from, to] },
+            properties: { type: "gap" },
+          });
+        } else {
+          const color = (points[i + 1].properties as any)?.prediction_color ?? "#2ba8c8";
+          if (color === "#f44336") continue; // red = manoeuvre break, don't draw solid line
+          features.push({
+            type: "Feature",
+            geometry: { type: "LineString", coordinates: [from, to] },
+            properties: { type: "line", prediction_color: color },
+          });
+        }
       }
 
       (map.getSource(SOURCE) as maplibregl.GeoJSONSource)?.setData({ type: "FeatureCollection", features });
