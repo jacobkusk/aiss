@@ -60,31 +60,16 @@ export default function TrackLayer({ selectedMmsi, onClear, onHover }: Props) {
       paint: { "line-color": "#2ba8c8", "line-width": 1.5, "line-opacity": 0.7 },
     });
 
-    // Outer diffuse glow
     map.addLayer({
       id: LAYER_RING,
       type: "circle",
       source: SOURCE,
       filter: ["all", ["==", ["geometry-type"], "Point"], ["has", "speed"]],
       paint: {
-        "circle-radius": 14,
-        "circle-color": "#00e676",
-        "circle-opacity": 0.12,
-        "circle-blur": 1,
-      },
-    });
-
-    // Inner tight glow
-    map.addLayer({
-      id: LAYER_RING + "-inner",
-      type: "circle",
-      source: SOURCE,
-      filter: ["all", ["==", ["geometry-type"], "Point"], ["has", "speed"]],
-      paint: {
-        "circle-radius": 8,
-        "circle-color": "#00e676",
-        "circle-opacity": 0.25,
-        "circle-blur": 0.8,
+        "circle-radius": 9,
+        "circle-color": "rgba(0,0,0,0)",
+        "circle-stroke-width": 1.5,
+        "circle-stroke-color": "#00e676",
       },
     });
 
@@ -189,7 +174,7 @@ export default function TrackLayer({ selectedMmsi, onClear, onHover }: Props) {
       map.off("mouseleave", LAYER_DOTS, handleWpLeave);
       map.off("mousemove", LAYER_RING, handleWpMove);
       map.off("mouseleave", LAYER_RING, handleWpLeave);
-      [LAYER_CHEVRON, LAYER_COG, LAYER_SOG, LAYER_RING + "-inner", LAYER_RING, LAYER_DOTS, LAYER_LINE].forEach((id) => {
+      [LAYER_CHEVRON, LAYER_COG, LAYER_SOG, LAYER_RING, LAYER_DOTS, LAYER_LINE].forEach((id) => {
         if (map.getLayer(id)) map.removeLayer(id);
       });
       if (map.getSource(SOURCE)) map.removeSource(SOURCE);
