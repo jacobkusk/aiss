@@ -67,7 +67,8 @@ interface RejectedPosition {
 // ---------------------------------------------------------------------------
 
 const MAX_SPEED_MS = 30          // ~58 knob — absolutt grænse for AIS
-const MIN_MOVEMENT_M = 5         // under 5m = stationary, skip
+const MIN_MOVEMENT_M = 2         // under 2m = GPS-støj, skip
+const DEDUP_WINDOW_SEC = 30      // samme position inden for 30s = skip (støj, ikke stop)
 const NULL_ISLAND_THRESHOLD = 0.001
 
 // ---------------------------------------------------------------------------
@@ -165,8 +166,10 @@ function validate(
       }
     }
 
-    if (dist < MIN_MOVEMENT_M) {
-      return { ok: false, reason: "stationary" }
+    // Afvis kun GPS-støj: identisk position inden for 30 sek
+    // Stoppede både ved kaj skal gemmes — det er information
+    if (dist < MIN_MOVEMENT_M && dtSec < DEDUP_WINDOW_SEC) {
+      return { ok: false, reason: "duplicate" }
     }
   }
 
