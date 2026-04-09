@@ -10,7 +10,8 @@ const LAYER_DOTS = "track-dots";
 const LAYER_RING = "track-rings";
 const LAYER_SOG = "track-sog";
 const LAYER_COG = "track-cog";
-const LAYER_GAP = "track-gap";
+const LAYER_GAP     = "track-gap";
+const LAYER_OUTLIER = "track-outlier";
 
 interface WaypointHover { x: number; y: number; mmsi: number | null; speed: number | null; course: number | null; heading: number | null; recorded_at: string | null; lat: number; lon: number; }
 
@@ -22,7 +23,14 @@ interface Props {
   onTimeBounds?: (bounds: [number, number]) => void; // epoch ms [min, max]
 }
 
-const GAP_THRESHOLD = 300; // 5 minutes in seconds
+const GAP_THRESHOLD     = 300;  // 5 minutes in seconds
+const OUTLIER_SPEED_KN  = 60;   // implied speed above this → outlier
+
+function distMeters(a: number[], b: number[]): number {
+  const dLat = (b[1] - a[1]) * 111320;
+  const dLon = (b[0] - a[0]) * 111320 * Math.cos(a[1] * Math.PI / 180);
+  return Math.sqrt(dLat * dLat + dLon * dLon);
+}
 
 function buildGeoJSON(points: GeoJSON.Feature[], timeRange: [number, number] | null | undefined): GeoJSON.FeatureCollection {
   let filtered = points;
@@ -31,7 +39,6 @@ function buildGeoJSON(points: GeoJSON.Feature[], timeRange: [number, number] | n
       const t = new Date((f.properties as any)?.recorded_at ?? 0).getTime();
       return t >= timeRange[0] && t <= timeRange[1];
     });
-    // Re-assign seq numbers after filtering
     filtered.forEach((f, i) => { (f.properties as any).seq = i + 1; });
   }
 
@@ -42,13 +49,26 @@ function buildGeoJSON(points: GeoJSON.Feature[], timeRange: [number, number] | n
     const to    = (filtered[i + 1].geometry as GeoJSON.Point).coordinates;
     const tA    = new Date((filtered[i].properties as any)?.recorded_at).getTime() / 1000;
     const tB    = new Date((filtered[i + 1].properties as any)?.recorded_at).getTime() / 1000;
-    const isGap = (tB - tA) > GAP_THRESHOLD;
+    const dtSec = tB - tA;
+    const isGap = dtSec > GAP_THRESHOLD;
 
-    if (isGap) {
+    const impliedKn = dtSec > 0 ? (distMeters(from, to) / dtSec) / 0.514444 : 999;
+    const isOutlier = impliedKn > OUTLIER_SPEED_KN;
+
+    if (isOutlier) {
+      // Physically impossible jump — dashed red
       features.push({
         type: "Feature",
         geometry: { type: "LineString", coordinates: [from, to] },
-        properties: { type: "gap" },
+        properties: { type: "outlier" },
+      });
+    } else if (isGap) {
+      // Signal gap — dashed in same color as destination waypoint
+      const color = (filtered[i + 1].properties as any)?.prediction_color ?? "#00e676";
+      features.push({
+        type: "Feature",
+        geometry: { type: "LineString", coordinates: [from, to] },
+        properties: { type: "gap", prediction_color: color },
       });
     } else {
       const color = (filtered[i + 1].properties as any)?.prediction_color ?? "#2ba8c8";
@@ -87,17 +107,31 @@ export default function TrackLayer({ selectedMmsi, onClear, onHover, timeRange, 
       },
     });
 
-    // Dashed grey line for signal gaps (>5 min between waypoints)
+    // Dashed line for signal gaps — color matches destination waypoint prediction
     map.addLayer({
       id: LAYER_GAP,
       type: "line",
       source: SOURCE,
       filter: ["==", ["get", "type"], "gap"],
       paint: {
-        "line-color": "#666666",
+        "line-color": ["coalesce", ["get", "prediction_color"], "#00e676"],
+        "line-width": 1,
+        "line-opacity": 0.55,
+        "line-dasharray": [4, 4],
+      },
+    });
+
+    // Dashed red for outlier positions (implied speed > 60 kn — bad GPS fix)
+    map.addLayer({
+      id: LAYER_OUTLIER,
+      type: "line",
+      source: SOURCE,
+      filter: ["==", ["get", "type"], "outlier"],
+      paint: {
+        "line-color": "#f44336",
         "line-width": 1,
         "line-opacity": 0.6,
-        "line-dasharray": [4, 4],
+        "line-dasharray": [3, 4],
       },
     });
 
@@ -203,7 +237,7 @@ export default function TrackLayer({ selectedMmsi, onClear, onHover, timeRange, 
       map.off("mouseleave", LAYER_DOTS, handleWpLeave);
       map.off("mousemove", LAYER_RING, handleWpMove);
       map.off("mouseleave", LAYER_RING, handleWpLeave);
-      [LAYER_COG, LAYER_SOG, LAYER_RING, LAYER_DOTS, LAYER_GAP, LAYER_LINE].forEach((id) => {
+      [LAYER_COG, LAYER_SOG, LAYER_RING, LAYER_DOTS, LAYER_OUTLIER, LAYER_GAP, LAYER_LINE].forEach((id) => {
         if (map.getLayer(id)) map.removeLayer(id);
       });
       if (map.getSource(SOURCE)) map.removeSource(SOURCE);
