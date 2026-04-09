@@ -369,13 +369,17 @@ export default function MapView({
         map.setLayoutProperty("land-mask-fill", "visibility", "visible");
         const src = map.getSource("land-mask") as maplibregl.GeoJSONSource;
         const bounds = map.getBounds();
+        console.log("[land-mask] fetching bounds:", bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth());
         supabase.rpc("get_land_layer", {
           min_lon: bounds.getWest(),
           min_lat: bounds.getSouth(),
           max_lon: bounds.getEast(),
           max_lat: bounds.getNorth(),
-        }).then(({ data }) => {
+        }).then(({ data, error }) => {
+          console.log("[land-mask] rpc result:", { data: data ? "ok" : null, error });
+          if (error) { console.error("[land-mask] rpc error:", error); return; }
           if (data) src.setData(data as any);
+          else console.warn("[land-mask] data is null");
         });
       } else {
         map.setLayoutProperty("land-mask-fill", "visibility", "none");
