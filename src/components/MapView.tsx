@@ -308,9 +308,10 @@ export default function MapView({
       return;
     }
 
-    // Separate lines (shape) from points (timestamped waypoints)
+    // Separate lines (shape) from points (timestamped waypoints) and gap arrows
     const lines = features.filter((f: any) => f.geometry?.type === "LineString" || f.geometry?.type === "MultiLineString");
     const waypoints = features.filter((f: any) => f.geometry?.type === "Point" && f.properties?.recorded_at);
+    const segmentEnds = features.filter((f: any) => f.geometry?.type === "Point" && f.properties?.type === "segment_end");
 
     // Sort waypoints by time — DB order is not guaranteed
     const sortedWaypoints = [...waypoints].sort((a: any, b: any) =>
@@ -342,6 +343,11 @@ export default function MapView({
       if (i === 0 || i % step === 0) {
         trackFeatures.push(sortedWaypoints[i] as GeoJSON.Feature);
       }
+    }
+
+    // Add segment endpoint arrows
+    for (const se of segmentEnds) {
+      trackFeatures.push(se as GeoJSON.Feature);
     }
 
     trackSrc.setData({ type: "FeatureCollection", features: trackFeatures });
@@ -532,7 +538,35 @@ export default function MapView({
         const circ = makeCircle(color);
         map.addImage(`circ-${name}`, { width: 14 * PR, height: 14 * PR, data: new Uint8Array(circ.data.buffer) }, { pixelRatio: PR });
       }
-      // Orange scrub marker icon
+      // Gap arrow icons — directional chevron for segment endpoints, 3 gap-duration colours
+      const makeGapArrow = (color: string): ImageData => {
+        const w = 9, h = 15;
+        const c = document.createElement("canvas");
+        c.width = w * PR; c.height = h * PR;
+        const ctx = c.getContext("2d")!;
+        ctx.scale(PR, PR);
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.moveTo(w / 2, 0);
+        ctx.lineTo(w, h);
+        ctx.lineTo(w / 2, h * 0.65);
+        ctx.lineTo(0, h);
+        ctx.closePath();
+        ctx.fill();
+        ctx.strokeStyle = "rgba(0,0,0,0.65)";
+        ctx.lineWidth = 0.8;
+        ctx.stroke();
+        return ctx.getImageData(0, 0, w * PR, h * PR);
+      };
+      const gapArrowColors: Record<string, string> = {
+        grey: "#aabbcc",    // < 30 min — brief signal loss
+        orange: "#ff9900",  // 30 min – 6 h — unknown
+        red: "#e03030",     // > 6 h — likely different trip
+      };
+      for (const [name, color] of Object.entries(gapArrowColors)) {
+        const img = makeGapArrow(color);
+        map.addImage(`gap-arrow-${name}`, { width: 9 * PR, height: 15 * PR, data: new Uint8Array(img.data.buffer) }, { pixelRatio: PR });
+      }
 
       // Sources
       map.addSource("land-mask", {
@@ -657,7 +691,7 @@ export default function MapView({
         id: "selected-track-dots",
         type: "circle",
         source: "selected-track",
-        filter: ["==", ["geometry-type"], "Point"],
+        filter: ["all", ["==", ["geometry-type"], "Point"], ["!=", ["get", "type"], "segment_end"]],
         paint: {
           "circle-radius": 5,
           "circle-color": "#ffd633",
@@ -672,13 +706,36 @@ export default function MapView({
         id: "selected-track-dots-hitarea",
         type: "circle",
         source: "selected-track",
-        filter: ["==", ["geometry-type"], "Point"],
+        filter: ["all", ["==", ["geometry-type"], "Point"], ["!=", ["get", "type"], "segment_end"]],
         paint: {
           "circle-radius": 12,
           "circle-color": "rgba(0,0,0,0)",
           "circle-opacity": 0,
         },
       });
+      // Segment endpoint gap arrows — directional, colour-coded by gap duration
+      map.addLayer({
+        id: "segment-gap-arrows",
+        type: "symbol",
+        source: "selected-track",
+        filter: ["==", ["get", "type"], "segment_end"],
+        layout: {
+          "icon-image": [
+            "case",
+            ["<", ["to-number", ["get", "gap_sec"], 0], 1800], "gap-arrow-grey",
+            ["<", ["to-number", ["get", "gap_sec"], 0], 21600], "gap-arrow-orange",
+            "gap-arrow-red",
+          ] as any,
+          "icon-rotate": ["to-number", ["get", "bearing"], 0] as any,
+          "icon-rotation-alignment": "map",
+          "icon-anchor": "top",
+          "icon-allow-overlap": true,
+          "icon-ignore-placement": true,
+          "icon-size": 1.0,
+        },
+        paint: { "icon-opacity": 0.9 },
+      });
+
       // Waypoint A marker (cyan)
       map.addLayer({
         id: "waypoint-a-marker",
