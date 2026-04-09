@@ -10,7 +10,9 @@ import TerminalFeed from "./TerminalFeed";
 import LiveHistoricalBadge from "./LiveHistoricalBadge";
 import SearchInput from "./SearchInput";
 import TimeMachine from "./TimeMachine";
-import { OVERLAY_LABELS, type Overlays, type MapStyle } from "./MapView";
+export type MapStyle = "light" | "dark" | "satellite";
+export type Overlays = Record<string, boolean>;
+const OVERLAY_LABELS: Record<string, string> = {};
 
 interface Props {
   onTimeMachineChange: (daysAgo: number) => void;

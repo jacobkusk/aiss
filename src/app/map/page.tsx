@@ -1,117 +1,99 @@
 "use client";
 
-import { useState, useCallback, useRef } from "react";
-import type maplibregl from "maplibre-gl";
-import LeftPanel from "@/components/LeftPanel";
-import MapView, { DEFAULT_OVERLAYS, type Overlays, type MapStyle } from "@/components/MapView";
-import DualScrubber from "@/components/DualScrubber";
+import { useState, useCallback } from "react";
+import Map from "@/components/map/Map";
+import VesselLayer from "@/components/map/VesselLayer";
+import TrackLayer from "@/components/map/TrackLayer";
+import VesselPanel from "@/components/map/VesselPanel";
+import Sidebar from "@/components/map/Sidebar";
+import Tooltip, { type TooltipData } from "@/components/map/Tooltip";
 
-import VesselPopup from "@/components/VesselPopup";
-import type { Vessel } from "@/lib/types";
+interface SelectedVessel {
+  mmsi: number;
+  name: string | null;
+  lat: number;
+  lon: number;
+  sog: number | null;
+  cog: number | null;
+  heading: number | null;
+  updated_at: string | null;
+}
 
-export default function Home() {
-  const [vessels, setVessels] = useState<Vessel[]>([]);
-  const [selectedVessel, setSelectedVessel] = useState<Vessel | null>(null);
-  const [isGlobe, setIsGlobe] = useState(true);
-  const [isLive, setIsLive] = useState(true);
-  const [historicalDate, setHistoricalDate] = useState<string | null>(null);
-  const [routeCount, setRouteCount] = useState(0);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [scrubMinutesAgo, setScrubMinutesAgo] = useState(0);
-  const [overlays, setOverlays] = useState<Overlays>(DEFAULT_OVERLAYS);
-  const [mapStyle, setMapStyle] = useState<MapStyle>("light");
-  const [zoomLevel, setZoomLevel] = useState(2);
-  const mapRef = useRef<maplibregl.Map | null>(null);
+interface HoverState {
+  x: number;
+  y: number;
+  data: TooltipData;
+}
 
-  const handleVesselSelect = useCallback((vessel: Vessel) => {
-    setSelectedVessel(vessel);
-    if (mapRef.current) {
-      mapRef.current.flyTo({
-        center: [vessel.lon, vessel.lat],
-        zoom: 10,
-        duration: 2000,
-      });
-    }
+function fmt(v: number | null, unit: string, dec = 1) {
+  return v != null ? `${v.toFixed(dec)} ${unit}` : "—";
+}
+function fmtCoord(v: number, dir: "lat" | "lon") {
+  return `${Math.abs(v).toFixed(5)}° ${dir === "lat" ? (v >= 0 ? "N" : "S") : (v >= 0 ? "E" : "W")}`;
+}
+function fmtTime(iso: string | null) {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+}
+
+export default function MapPage() {
+  const [selectedVessel, setSelectedVessel] = useState<SelectedVessel | null>(null);
+  const [hover, setHover] = useState<HoverState | null>(null);
+
+  const handleVesselHover = useCallback((d: Parameters<React.ComponentProps<typeof VesselLayer>["onHover"]>[0]) => {
+    if (!d) { setHover(null); return; }
+    setHover({
+      x: d.x, y: d.y,
+      data: {
+        title: d.name || `MMSI ${d.mmsi}`,
+        rows: [
+          { label: "MMSI", value: String(d.mmsi) },
+          { label: "SOG", value: fmt(d.sog, "kn") },
+          { label: "COG", value: fmt(d.cog, "°") },
+          { label: "HDG", value: fmt(d.heading, "°", 0) },
+          { label: "LAT", value: fmtCoord(d.lat, "lat") },
+          { label: "LON", value: fmtCoord(d.lon, "lon") },
+          { label: "Updated", value: fmtTime(d.updated_at) },
+        ],
+      },
+    });
   }, []);
 
-  const handleTimeMachineChange = useCallback((daysAgo: number) => {
-    if (daysAgo === 0) {
-      setIsLive(true);
-      setHistoricalDate(null);
-    } else {
-      setIsLive(false);
-      const d = new Date();
-      d.setDate(d.getDate() - daysAgo);
-      setHistoricalDate(d.toISOString().split("T")[0]);
-    }
-  }, []);
-
-  const handleToggleOverlay = useCallback((key: string) => {
-    setOverlays((prev) => ({ ...prev, [key]: !prev[key] }));
-  }, []);
+  const handleWaypointHover = useCallback((d: Parameters<React.ComponentProps<typeof TrackLayer>["onHover"]>[0]) => {
+    if (!d) { setHover(null); return; }
+    setHover({
+      x: d.x, y: d.y,
+      data: {
+        title: selectedVessel?.name || `MMSI ${d.mmsi ?? selectedVessel?.mmsi}`,
+        rows: [
+          { label: "MMSI", value: String(d.mmsi ?? selectedVessel?.mmsi ?? "—") },
+          { label: "SOG", value: fmt(d.speed, "kn") },
+          { label: "COG", value: fmt(d.course, "°") },
+          { label: "HDG", value: fmt(d.heading, "°", 0) },
+          { label: "LAT", value: fmtCoord(d.lat, "lat") },
+          { label: "LON", value: fmtCoord(d.lon, "lon") },
+          { label: "Time", value: fmtTime(d.recorded_at) },
+        ],
+      },
+    });
+  }, [selectedVessel]);
 
   return (
-    <div className="flex h-full w-full overflow-hidden">
-      {/* Left Panel */}
-      {sidebarOpen && (
-        <LeftPanel
-          onTimeMachineChange={handleTimeMachineChange}
-          isLive={isLive}
-          vesselCount={vessels.length}
-          date={historicalDate}
-          routeCount={routeCount}
-          overlays={overlays}
-          onToggleOverlay={handleToggleOverlay}
-          mapStyle={mapStyle}
-          onMapStyleChange={setMapStyle}
-          onClose={() => setSidebarOpen(false)}
-        />
-      )}
-
-      {/* Map Area */}
-      <div className="relative flex-1">
-        {/* Open sidebar button */}
-        {!sidebarOpen && (
-          <button
-            onClick={() => setSidebarOpen(true)}
-            className="absolute top-4 left-4 z-30 flex items-center justify-center w-10 h-10 rounded-lg"
-            style={{
-              background: "rgba(26, 26, 62, 0.9)",
-              border: "1px solid rgba(255,255,255,0.1)",
-              color: "rgba(255,255,255,0.7)",
-              fontSize: "18px",
-              cursor: "pointer",
-              backdropFilter: "blur(10px)",
-            }}
-          >
-            &#9776;
-          </button>
-        )}
-        <MapView
-          mapRef={mapRef}
-          isGlobe={isGlobe}
-          isLive={isLive}
-          historicalDate={historicalDate}
-          scrubMinutesAgo={scrubMinutesAgo}
-          overlays={overlays}
-          mapStyle={mapStyle}
-          onVesselsUpdate={setVessels}
-          onVesselClick={setSelectedVessel}
-          onRouteCountUpdate={setRouteCount}
-          onToggleGlobe={setIsGlobe}
-          onToggleOverlay={handleToggleOverlay}
-          onZoomChange={setZoomLevel}
-        />
-
-        {/* Overlays */}
-        {selectedVessel && (
-          <VesselPopup
-            vessel={selectedVessel}
-            onClose={() => setSelectedVessel(null)}
+    <div style={{ display: "flex", height: "100%", width: "100%", overflow: "hidden" }}>
+      <Sidebar />
+      <div style={{ position: "relative", flex: 1 }}>
+        <Map>
+          <VesselLayer onVesselClick={setSelectedVessel} onHover={handleVesselHover} />
+          <TrackLayer
+            selectedMmsi={selectedVessel?.mmsi ?? null}
+            onClear={() => setSelectedVessel(null)}
+            onHover={handleWaypointHover}
           />
+        </Map>
+        {selectedVessel && (
+          <VesselPanel vessel={selectedVessel} onClose={() => setSelectedVessel(null)} />
         )}
-
-        {/* Scrubber removed — to be redesigned */}
+        {hover && <Tooltip data={hover.data} x={hover.x} y={hover.y} />}
       </div>
     </div>
   );

@@ -29,7 +29,7 @@ export async function GET(req: NextRequest) {
       const mmsi = row.entities?.domain_meta?.mmsi ?? "?"
       const sog = row.speed ? (row.speed / 0.514444).toFixed(1) : "0.0"
       return {
-        seq: ts,          // bruger timestamp som seq — aldrig nulstillet
+        seq: ts * 1000 + i,  // unik: ms timestamp + position i batch
         t: ts,
         type: "collect" as const,
         msg: `MMSI ${mmsi}  ${row.lat?.toFixed(4)} ${row.lon?.toFixed(4)}  ${sog}kn`,

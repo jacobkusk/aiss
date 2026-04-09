@@ -39,8 +39,9 @@ export default function TerminalFeed() {
         if (!mounted || data.length === 0) return;
         seqRef.current = data[data.length - 1].seq;
         setLines(prev => {
-          const next = [...prev, ...data].slice(-40);
-          return next;
+          const seen = new Set(prev.map(e => e.seq));
+          const fresh = data.filter(e => !seen.has(e.seq));
+          return [...prev, ...fresh].slice(-40);
         });
       } catch {}
     }
@@ -102,8 +103,8 @@ export default function TerminalFeed() {
             waiting for events...
           </div>
         ) : (
-          lines.map(ev => (
-            <div key={ev.seq} style={{
+          lines.map((ev, idx) => (
+            <div key={`${ev.seq}_${idx}`} style={{
               padding: "1px 12px",
               display: "flex",
               gap: "8px",
