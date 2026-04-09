@@ -73,7 +73,7 @@ function bearingBetween(a: [number, number], b: [number, number]): number {
  */
 function buildPlausibleSegments(
   waypoints: GeoJSON.Feature[],
-  maxSpeedKn = 30,
+  maxSpeedKn = 20,
 ): [number, number][][] {
   const segments: [number, number][][] = [];
   let seg: [number, number][] = [];
