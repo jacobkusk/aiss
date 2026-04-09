@@ -63,9 +63,9 @@ export default function TrackLayer({ selectedMmsi, onClear, onHover }: Props) {
       id: LAYER_SOG,
       type: "symbol",
       source: SOURCE,
-      filter: ["all", ["==", ["geometry-type"], "Point"], ["has", "speed"]],
+      filter: ["all", ["==", ["geometry-type"], "Point"], ["has", "seq"]],
       layout: {
-        "text-field": ["concat", ["to-string", ["get", "speed"]], " kn"],
+        "text-field": ["to-string", ["get", "seq"]],
         "text-size": 10,
         "text-offset": [-1.2, 0],
         "text-anchor": "right",
@@ -174,6 +174,8 @@ export default function TrackLayer({ selectedMmsi, onClear, onHover }: Props) {
         const tb = (b.properties as any)?.recorded_at ?? "";
         return ta < tb ? -1 : 1;
       });
+
+      points.forEach((f, i) => { (f.properties as any).seq = i + 1; });
 
       const lineCoords = points.map((f) => (f.geometry as GeoJSON.Point).coordinates);
       const features: GeoJSON.Feature[] = [...points];
