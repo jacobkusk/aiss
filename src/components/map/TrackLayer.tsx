@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import { useMap } from "./MapContext";
 import { supabase } from "@/lib/supabase";
+import { GAP, OUTLIER, LINE_STYLE } from "@/lib/trackRules";
 
 const SOURCE = "track";
 const LAYER_LINE = "track-line";
@@ -23,8 +24,6 @@ interface Props {
   onTimeBounds?: (bounds: [number, number]) => void; // epoch ms [min, max]
 }
 
-const GAP_THRESHOLD = 300; // 5 minutes in seconds
-
 interface TrackStats { max_speed: number | null; avg_speed_moving: number | null; }
 
 function distMeters(a: number[], b: number[]): number {
@@ -33,14 +32,13 @@ function distMeters(a: number[], b: number[]): number {
   return Math.sqrt(dLat * dLat + dLon * dLon);
 }
 
-// Adaptive threshold: 3× vessel max speed or 5× average — minimum 20 kn
 function outlierThreshold(stats: TrackStats | null): number {
   const max = stats?.max_speed ?? null;
   const avg = stats?.avg_speed_moving ?? null;
   const candidates: number[] = [];
-  if (max != null && max > 0) candidates.push(max * 3);
-  if (avg != null && avg > 0) candidates.push(avg * 5);
-  return candidates.length ? Math.max(Math.min(...candidates), 20) : 60;
+  if (max != null && max > 0) candidates.push(max * OUTLIER.MAX_SPEED_FACTOR);
+  if (avg != null && avg > 0) candidates.push(avg * OUTLIER.AVG_SPEED_FACTOR);
+  return candidates.length ? Math.max(Math.min(...candidates), OUTLIER.MIN_THRESHOLD_KN) : OUTLIER.DEFAULT_THRESHOLD_KN;
 }
 
 function buildGeoJSON(points: GeoJSON.Feature[], timeRange: [number, number] | null | undefined, stats: TrackStats | null): GeoJSON.FeatureCollection {
@@ -65,7 +63,7 @@ function buildGeoJSON(points: GeoJSON.Feature[], timeRange: [number, number] | n
     const tA    = new Date((filtered[i].properties as any)?.recorded_at).getTime() / 1000;
     const tB    = new Date((filtered[i + 1].properties as any)?.recorded_at).getTime() / 1000;
     const dtSec = tB - tA;
-    const isGap = dtSec > GAP_THRESHOLD;
+    const isGap = dtSec > GAP.THRESHOLD_SEC;
     const impliedKn = dtSec > 0 ? (distMeters(from, to) / dtSec) / 0.514444 : 999;
     const isOutlier = impliedKn > threshold;
     const color = (filtered[i + 1].properties as any)?.prediction_color ?? (isGap ? "#00e676" : "#2ba8c8");
@@ -136,8 +134,8 @@ export default function TrackLayer({ selectedMmsi, onClear, onHover, timeRange, 
       filter: ["==", ["get", "type"], "line"],
       paint: {
         "line-color": ["coalesce", ["get", "prediction_color"], "#2ba8c8"],
-        "line-width": 1.5,
-        "line-opacity": 0.7,
+        "line-width": LINE_STYLE.normal.width,
+        "line-opacity": LINE_STYLE.normal.opacity,
       },
     });
 
@@ -149,9 +147,9 @@ export default function TrackLayer({ selectedMmsi, onClear, onHover, timeRange, 
       filter: ["==", ["get", "type"], "gap"],
       paint: {
         "line-color": ["coalesce", ["get", "prediction_color"], "#00e676"],
-        "line-width": 1.5,
-        "line-opacity": 0.75,
-        "line-dasharray": [5, 3],
+        "line-width": LINE_STYLE.gap.width,
+        "line-opacity": LINE_STYLE.gap.opacity,
+        "line-dasharray": LINE_STYLE.gap.dash,
       },
     });
 
@@ -163,9 +161,9 @@ export default function TrackLayer({ selectedMmsi, onClear, onHover, timeRange, 
       filter: ["==", ["get", "type"], "outlier"],
       paint: {
         "line-color": "#f44336",
-        "line-width": 1,
-        "line-opacity": 0.6,
-        "line-dasharray": [3, 4],
+        "line-width": LINE_STYLE.outlier.width,
+        "line-opacity": LINE_STYLE.outlier.opacity,
+        "line-dasharray": LINE_STYLE.outlier.dash,
       },
     });
 
