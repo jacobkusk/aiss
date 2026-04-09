@@ -93,40 +93,24 @@ export default function TimeSlider({ minTime, maxTime, value, onChange }: Props)
         {/* Start handle */}
         <input
           type="range"
+          className="time-slider-input"
           min={minTime}
           max={maxTime}
           step={60_000}
           value={value[0]}
           onChange={handleStart}
-          style={{
-            position: "absolute",
-            width: "100%",
-            height: "100%",
-            margin: 0,
-            padding: 0,
-            opacity: 0,
-            cursor: "pointer",
-            zIndex: value[0] > minTime + span * 0.9 ? 2 : 1,
-          }}
+          style={{ zIndex: 1 }}
         />
         {/* End handle */}
         <input
           type="range"
+          className="time-slider-input"
           min={minTime}
           max={maxTime}
           step={60_000}
           value={value[1]}
           onChange={handleEnd}
-          style={{
-            position: "absolute",
-            width: "100%",
-            height: "100%",
-            margin: 0,
-            padding: 0,
-            opacity: 0,
-            cursor: "pointer",
-            zIndex: value[0] > minTime + span * 0.9 ? 1 : 2,
-          }}
+          style={{ zIndex: 2 }}
         />
 
         {/* Visible thumb: start */}
