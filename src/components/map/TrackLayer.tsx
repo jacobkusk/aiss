@@ -93,7 +93,7 @@ export default function TrackLayer({ selectedMmsi, onClear, onHover }: Props) {
       type: "circle",
       source: SOURCE,
       filter: ["all", ["==", ["geometry-type"], "Point"], ["has", "mmsi"]],
-      paint: { "circle-radius": 3, "circle-color": "#ffffff", "circle-opacity": 0.9 },
+      paint: { "circle-radius": 3, "circle-color": "#00e676", "circle-opacity": 0.95, "circle-blur": 0.3 },
     });
 
     map.addLayer({
