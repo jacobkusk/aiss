@@ -89,8 +89,8 @@ export default function TrackLayer({ selectedMmsi, onClear, onHover }: Props) {
       layout: {
         "text-field": ["concat", ["to-string", ["get", "speed"]], " kn"],
         "text-size": 10,
-        "text-offset": [1.2, 0],
-        "text-anchor": "left",
+        "text-offset": [-1.2, 0],
+        "text-anchor": "right",
       },
       paint: {
         "text-color": "#00e676",
