@@ -1,13 +1,15 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import Map from "@/components/map/Map";
 import VesselLayer from "@/components/map/VesselLayer";
+import HistoricalLayer from "@/components/map/HistoricalLayer";
 import TrackLayer from "@/components/map/TrackLayer";
 import VesselPanel from "@/components/map/VesselPanel";
 import Sidebar from "@/components/map/Sidebar";
 import Tooltip, { type TooltipData } from "@/components/map/Tooltip";
 import TimeSlider from "@/components/map/TimeSlider";
+import TimeMachineControl from "@/components/map/TimeMachineControl";
 
 interface SelectedVessel {
   mmsi: number;
@@ -37,17 +39,40 @@ function fmtTime(iso: string | null) {
   return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
 }
 
+// Format Date → "YYYY-MM-DDTHH:MM" for datetime-local input
+function toDatetimeLocal(d: Date) {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 export default function MapPage() {
   const [selectedVessel, setSelectedVessel] = useState<SelectedVessel | null>(null);
   const [hover, setHover] = useState<HoverState | null>(null);
 
-  // Time slider state
+  // Time slider
   const [timeBounds, setTimeBounds] = useState<[number, number] | null>(null);
   const [timeRange, setTimeRange] = useState<[number, number] | null>(null);
+  const focusTimeRef = useRef<number | null>(null); // historical time to auto-center slider on
+
+  // Time machine
+  const [histMode, setHistMode] = useState(false);
+  const [histTimeStr, setHistTimeStr] = useState(() => toDatetimeLocal(new Date(Date.now() - 3600_000)));
+  const histTime = new Date(histTimeStr);
 
   const handleTimeBounds = useCallback((bounds: [number, number]) => {
     setTimeBounds(bounds);
-    setTimeRange(bounds); // default: show everything
+    // If we came from a historical click, center the slider around that time
+    const focus = focusTimeRef.current;
+    if (focus != null) {
+      const WINDOW = 45 * 60_000; // ±45 min around historical click
+      setTimeRange([
+        Math.max(bounds[0], focus - WINDOW),
+        Math.min(bounds[1], focus + WINDOW),
+      ]);
+      focusTimeRef.current = null;
+    } else {
+      setTimeRange(bounds);
+    }
   }, []);
 
   const handleVesselHover = useCallback((d: Parameters<React.ComponentProps<typeof VesselLayer>["onHover"]>[0]) => {
@@ -92,14 +117,40 @@ export default function MapPage() {
     setSelectedVessel(null);
     setTimeBounds(null);
     setTimeRange(null);
+    focusTimeRef.current = null;
   }, []);
+
+  const handleHistVesselClick = useCallback((vessel: SelectedVessel) => {
+    // Store the historical time so slider auto-centers when track loads
+    focusTimeRef.current = histTime.getTime();
+    setSelectedVessel(vessel);
+  }, [histTime]);
+
+  const handleToggleHistMode = useCallback(() => {
+    setHistMode((v) => !v);
+    handleClear();
+  }, [handleClear]);
 
   return (
     <div style={{ display: "flex", height: "100%", width: "100%", overflow: "hidden" }}>
       <Sidebar />
       <div style={{ position: "relative", flex: 1 }}>
         <Map>
-          <VesselLayer onVesselClick={setSelectedVessel} onHover={handleVesselHover} hiddenMmsi={selectedVessel?.mmsi ?? null} />
+          {histMode ? (
+            <HistoricalLayer
+              time={histTime}
+              windowMinutes={10}
+              onVesselClick={handleHistVesselClick}
+              onHover={handleVesselHover}
+              hiddenMmsi={selectedVessel?.mmsi ?? null}
+            />
+          ) : (
+            <VesselLayer
+              onVesselClick={setSelectedVessel}
+              onHover={handleVesselHover}
+              hiddenMmsi={selectedVessel?.mmsi ?? null}
+            />
+          )}
           <TrackLayer
             selectedMmsi={selectedVessel?.mmsi ?? null}
             onClear={handleClear}
@@ -108,6 +159,14 @@ export default function MapPage() {
             onTimeBounds={handleTimeBounds}
           />
         </Map>
+
+        <TimeMachineControl
+          active={histMode}
+          time={histTimeStr}
+          onToggle={handleToggleHistMode}
+          onTimeChange={setHistTimeStr}
+        />
+
         {selectedVessel && (
           <VesselPanel vessel={selectedVessel} onClose={handleClear} />
         )}
