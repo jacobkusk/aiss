@@ -203,6 +203,8 @@ export default function TrackLayer({ selectedMmsi, onClear, onHover, timeRange, 
         "text-size": 10,
         "text-offset": [1.4, -0.1],
         "text-anchor": "left",
+        "text-allow-overlap": true,
+        "text-ignore-placement": true,
       },
       paint: {
         "text-color": ["coalesce", ["get", "prediction_color"], "#00e676"],
