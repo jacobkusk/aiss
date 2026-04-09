@@ -243,6 +243,8 @@ export default function MapView({
   const containerRef = useRef<HTMLDivElement>(null);
   const initializedRef = useRef(false);
   const refreshTimerRef = useRef<ReturnType<typeof setInterval>>(undefined);
+  const trackRefreshTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const selectedMmsiRef = useRef<number | null>(null);
   const fetchVesselsRef = useRef<(() => void) | null>(null);
   const trackFeaturesRef = useRef<GeoJSON.Feature[]>([]);
 
@@ -856,14 +858,24 @@ export default function MapView({
 
           onVesselClickRef.current(vesselBase);
 
-          const { data } = await supabase.rpc("get_vessel_track", { p_mmsi: mmsi, p_minutes: 2880 });
-          if (data) {
-            const geojson = typeof data === "string" ? JSON.parse(data) : data;
-            trackFeaturesRef.current = geojson.features ?? [];
-            updateTrackDisplay(map);
-            const stats = geojson.stats ?? {};
-            onVesselClickRef.current({ ...vesselBase, max_speed: stats.max_speed ?? null, avg_speed_moving: stats.avg_speed_moving ?? null });
-          }
+          const fetchTrack = async () => {
+            const { data } = await supabase.rpc("get_vessel_track", { p_mmsi: mmsi, p_minutes: 2880 });
+            if (data) {
+              const geojson = typeof data === "string" ? JSON.parse(data) : data;
+              trackFeaturesRef.current = geojson.features ?? [];
+              updateTrackDisplay(map);
+              const stats = geojson.stats ?? {};
+              onVesselClickRef.current({ ...vesselBase, max_speed: stats.max_speed ?? null, avg_speed_moving: stats.avg_speed_moving ?? null });
+            }
+          };
+
+          // Stop evt. tidligere track-refresh
+          if (trackRefreshTimerRef.current) clearInterval(trackRefreshTimerRef.current);
+          selectedMmsiRef.current = mmsi;
+
+          // Hent med det samme + refresh hvert 10. sekund
+          await fetchTrack();
+          trackRefreshTimerRef.current = setInterval(fetchTrack, 10000);
         }
       };
       map.on("click", "ais-vessels", handleVesselClick);
@@ -1009,7 +1021,9 @@ export default function MapView({
         if (measureActiveRef.current) return;
         // If any layer-specific handler fired, don't clear
         if (vesselJustClickedRef.current || trackDotJustClickedRef.current || clusterJustClickedRef.current) return;
-        // Clear track
+        // Stop track auto-refresh + ryd
+        if (trackRefreshTimerRef.current) { clearInterval(trackRefreshTimerRef.current); trackRefreshTimerRef.current = null; }
+        selectedMmsiRef.current = null;
         trackFeaturesRef.current = [];
         const empty: GeoJSON.FeatureCollection = { type: "FeatureCollection", features: [] };
         (map.getSource("selected-track") as maplibregl.GeoJSONSource | undefined)?.setData(empty);

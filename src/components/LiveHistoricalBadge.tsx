@@ -27,37 +27,30 @@ export default function LiveHistoricalBadge({ isLive, vesselCount, date, routeCo
 
   return (
     <div
-      className="absolute top-4 z-30 flex flex-col rounded-lg px-3 py-2"
+      className="flex flex-col rounded-lg px-3 py-2"
       style={{
-        left: sidebarOpen ? "16px" : "60px",
         background: "var(--bg-panel)",
         backdropFilter: "blur(20px)",
         border: "1px solid var(--border)",
-        transition: "left 0.15s",
         minWidth: "160px",
       }}
     >
       {isLive ? (
-        <>
-          <div className="flex items-center gap-2">
-            <span
-              className="inline-block w-2 h-2 rounded-full pulse-live"
-              style={{ background: "var(--green-live)" }}
-            />
-            <span className="text-xs font-bold font-mono" style={{ color: "var(--green-live)" }}>
-              LIVE
-            </span>
-            <span className="text-xs font-mono" style={{ color: "var(--text-muted)" }}>
-              {vesselCount.toLocaleString()} vessels
-            </span>
-          </div>
-          <div className="font-mono" style={{ fontSize: "18px", fontWeight: 700, color: "#ffffff", lineHeight: 1.2, marginTop: "4px" }}>
+        <div className="flex items-center gap-2">
+          <span
+            className="inline-block w-2 h-2 rounded-full pulse-live flex-shrink-0"
+            style={{ background: "var(--green-live)" }}
+          />
+          <span className="font-mono font-bold" style={{ fontSize: "18px", color: "var(--green-live)", lineHeight: 1 }}>
+            LIVE
+          </span>
+          <span className="font-mono font-bold" style={{ fontSize: "18px", color: "#ffffff", lineHeight: 1 }}>
             {timeStr}
-          </div>
-          <div style={{ fontSize: "9px", color: "rgba(255,255,255,0.75)", fontFamily: "var(--font-mono)", letterSpacing: "0.06em" }}>
+          </span>
+          <span className="font-mono font-bold" style={{ fontSize: "18px", color: "rgba(255,255,255,0.35)", lineHeight: 1 }}>
             {utcLabel}
-          </div>
-        </>
+          </span>
+        </div>
       ) : (
         <div className="flex items-center gap-2">
           <span

@@ -6,7 +6,6 @@ import LeftPanel from "@/components/LeftPanel";
 import MapView, { DEFAULT_OVERLAYS, type Overlays, type MapStyle } from "@/components/MapView";
 import DualScrubber from "@/components/DualScrubber";
 
-import LiveHistoricalBadge from "@/components/LiveHistoricalBadge";
 import VesselPopup from "@/components/VesselPopup";
 import type { Vessel } from "@/lib/types";
 
@@ -58,6 +57,9 @@ export default function Home() {
         <LeftPanel
           onTimeMachineChange={handleTimeMachineChange}
           isLive={isLive}
+          vesselCount={vessels.length}
+          date={historicalDate}
+          routeCount={routeCount}
           overlays={overlays}
           onToggleOverlay={handleToggleOverlay}
           mapStyle={mapStyle}
@@ -102,14 +104,6 @@ export default function Home() {
         />
 
         {/* Overlays */}
-        <LiveHistoricalBadge
-          isLive={isLive}
-          vesselCount={vessels.length}
-          date={historicalDate}
-          routeCount={routeCount}
-          sidebarOpen={sidebarOpen}
-        />
-
         {selectedVessel && (
           <VesselPopup
             vessel={selectedVessel}
