@@ -41,24 +41,24 @@ export default function TrackLayer({ selectedMmsi, onClear, onHover }: Props) {
     });
 
     map.addLayer({
-      id: LAYER_DOTS,
-      type: "circle",
-      source: SOURCE,
-      filter: ["all", ["==", ["geometry-type"], "Point"], ["has", "mmsi"]],
-      paint: { "circle-radius": 3, "circle-color": "#ffffff", "circle-opacity": 0.9 },
-    });
-
-    map.addLayer({
       id: LAYER_RING,
       type: "circle",
       source: SOURCE,
       filter: ["all", ["==", ["geometry-type"], "Point"], ["has", "speed"]],
       paint: {
         "circle-radius": 9,
-        "circle-color": "rgba(0,0,0,0)",
+        "circle-color": "#020a12",
         "circle-stroke-width": 1.5,
         "circle-stroke-color": "#00e676",
       },
+    });
+
+    map.addLayer({
+      id: LAYER_DOTS,
+      type: "circle",
+      source: SOURCE,
+      filter: ["all", ["==", ["geometry-type"], "Point"], ["has", "mmsi"]],
+      paint: { "circle-radius": 3, "circle-color": "#ffffff", "circle-opacity": 0.9 },
     });
 
     map.addLayer({
