@@ -21,12 +21,14 @@ function geoOffset(lon: number, lat: number, bearingDeg: number, distDeg: number
 }
 
 function makeChevron(lon: number, lat: number, bearingDeg: number): GeoJSON.Feature {
-  const [plon, plat] = geoOffset(lon, lat, bearingDeg, 0.00020);
+  const apex = geoOffset(lon, lat, bearingDeg, 0.00020);
+  const back = (bearingDeg + 180) % 360;
+  const left  = geoOffset(apex[0], apex[1], (back - 35 + 360) % 360, 0.00015);
+  const right = geoOffset(apex[0], apex[1], (back + 35) % 360, 0.00015);
   return {
     type: "Feature",
-    geometry: { type: "Point", coordinates: [plon, plat] },
-    // ▶ points east (90°), so rotate by bearing - 90 to align with COG
-    properties: { type: "chevron", bearing: (bearingDeg - 90 + 360) % 360 },
+    geometry: { type: "LineString", coordinates: [left, apex, right] },
+    properties: { type: "chevron" },
   };
 }
 
@@ -121,24 +123,14 @@ export default function TrackLayer({ selectedMmsi, onClear, onHover }: Props) {
       },
     });
 
-    // Chevron — font SDF unicode arrow at pre-computed geographic position
+    // Chevron — pure WebGL vector line geometry
     map.addLayer({
       id: LAYER_CHEVRON,
-      type: "symbol",
+      type: "line",
       source: SOURCE,
       filter: ["==", ["get", "type"], "chevron"],
-      layout: {
-        "text-field": "▶",
-        "text-size": 14,
-        "text-rotate": ["get", "bearing"],
-        "text-rotation-alignment": "map",
-        "text-allow-overlap": true,
-        "text-ignore-placement": true,
-      },
-      paint: {
-        "text-color": "#2ba8c8",
-        "text-opacity": 0.9,
-      },
+      layout: { "line-cap": "round", "line-join": "round" },
+      paint: { "line-color": "#2ba8c8", "line-width": 2, "line-opacity": 0.9 },
     });
 
     // Click empty area → clear
