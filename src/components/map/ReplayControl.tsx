@@ -11,6 +11,7 @@ interface Props {
   currentTime: number | null;
   start: number | null;
   end: number | null;
+  dimmed?: boolean;
 }
 
 const SPEEDS = [1, 5, 15, 60, 300]; // realtime multipliers
@@ -27,7 +28,7 @@ function fmtDate(epoch: number) {
   return new Date(epoch).toLocaleDateString([], { day: "2-digit", month: "short" });
 }
 
-export default function ReplayControl({ onLoad, onTimeChange, onClose, currentTime, start, end }: Props) {
+export default function ReplayControl({ onLoad, onTimeChange, onClose, currentTime, start, end, dimmed }: Props) {
   const yesterday = new Date(Date.now() - 86_400_000);
   const [startStr, setStartStr] = useState(() => toLocalISO(new Date(yesterday.setHours(17, 0, 0, 0))));
   const [endStr,   setEndStr]   = useState(() => toLocalISO(new Date(yesterday.setHours(21, 30, 0, 0))));
@@ -108,7 +109,10 @@ export default function ReplayControl({ onLoad, onTimeChange, onClose, currentTi
       bottom: 20,
       left: "50%",
       transform: "translateX(-50%)",
-      width: "min(660px, calc(100vw - 40px))",
+      width: "min(600px, calc(100vw - 40px))",
+      opacity: dimmed ? 0.35 : 1,
+      pointerEvents: dimmed ? "none" : "auto",
+      transition: "opacity 0.2s",
       background: "rgba(4, 12, 20, 0.92)",
       border: "1px solid rgba(245, 158, 11, 0.25)",
       borderRadius: 8,

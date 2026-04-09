@@ -190,6 +190,7 @@ export default function MapPage() {
             currentTime={replayTime}
             start={replayStart}
             end={replayEnd}
+            dimmed={!!(timeBounds && timeRange)}
           />
         )}
 
@@ -203,6 +204,8 @@ export default function MapPage() {
             maxTime={timeBounds[1]}
             value={timeRange}
             onChange={setTimeRange}
+            onClose={handleClear}
+            bottom={replayMode ? 158 : 28}
           />
         )}
       </div>
