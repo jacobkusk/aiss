@@ -169,7 +169,7 @@ export default function MapPage() {
               onVesselUpdate={setSelectedVessel}
               selectedMmsi={selectedVessel?.mmsi ?? null}
               onHover={handleVesselHover}
-              hiddenMmsi={null}
+              hiddenMmsi={selectedVessel?.mmsi ?? null}
             />
           )}
           <TrackLayer

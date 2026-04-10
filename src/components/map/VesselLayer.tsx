@@ -208,6 +208,30 @@ export default function VesselLayer({ onVesselClick, onVesselUpdate, selectedMms
     };
   }, [map]);
 
+  // Dim all other vessels when one is selected
+  useEffect(() => {
+    if (!map || !map.getLayer(LAYER_DOT)) return;
+    if (selectedMmsi != null) {
+      map.setPaintProperty(LAYER_DOT, "circle-color", [
+        "case", ["==", ["get", "mmsi"], selectedMmsi], "#00e676", "#4a5568",
+      ]);
+      map.setPaintProperty(LAYER_DOT, "circle-opacity", [
+        "case", ["==", ["get", "mmsi"], selectedMmsi], 0.9, 0.35,
+      ]);
+      map.setPaintProperty(LAYER_COG, "text-opacity", [
+        "case", ["==", ["get", "mmsi"], selectedMmsi], 0.9, 0,
+      ]);
+      map.setPaintProperty(LAYER_LABEL, "text-opacity", [
+        "case", ["==", ["get", "mmsi"], selectedMmsi], 1, 0,
+      ]);
+    } else {
+      map.setPaintProperty(LAYER_DOT, "circle-color", "#00e676");
+      map.setPaintProperty(LAYER_DOT, "circle-opacity", 0.9);
+      map.setPaintProperty(LAYER_COG, "text-opacity", 0.9);
+      map.setPaintProperty(LAYER_LABEL, "text-opacity", 1);
+    }
+  }, [map, selectedMmsi]);
+
   // Hide the selected vessel's dot so track waypoints render cleanly
   useEffect(() => {
     if (!map || !map.getLayer(LAYER_DOT)) return;
