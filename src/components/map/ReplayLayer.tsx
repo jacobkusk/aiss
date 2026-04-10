@@ -136,8 +136,6 @@ export default function ReplayLayer({ tracks, currentTime, onVesselSingleClick, 
       },
       paint: {
         "text-color": "#f5d57a",
-        "text-halo-color": "#020a12",
-        "text-halo-width": 1.5,
       },
     });
 

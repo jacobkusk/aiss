@@ -100,8 +100,6 @@ export default function VesselLayer({ onVesselClick, onVesselUpdate, selectedMms
       },
       paint: {
         "text-color": "#c8dce8",
-        "text-halo-color": "#020a12",
-        "text-halo-width": 1.5,
       },
     });
 
