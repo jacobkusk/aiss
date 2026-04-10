@@ -5,6 +5,7 @@ import { useMap } from "./MapContext";
 
 const SOURCE = "replay";
 const LAYER_DOT = "replay-dots";
+const LAYER_COG = "replay-cog";
 const LAYER_LABEL = "replay-labels";
 
 export interface VesselPoint {
@@ -102,6 +103,29 @@ export default function ReplayLayer({ tracks, currentTime, onVesselSingleClick, 
     });
 
     map.addLayer({
+      id: LAYER_COG,
+      type: "symbol",
+      source: SOURCE,
+      filter: [">=", ["number", ["get", "cog"], -1], 0],
+      layout: {
+        "text-field": "●",
+        "text-size": 8,
+        "text-offset": [0, -1.125],
+        "text-anchor": "center",
+        "text-rotate": ["number", ["get", "cog"], 0],
+        "text-rotation-alignment": "map",
+        "text-allow-overlap": true,
+        "text-ignore-placement": true,
+      },
+      paint: {
+        "text-color": "#ffffff",
+        "text-halo-color": "#020a12",
+        "text-halo-width": 1,
+        "text-opacity": 0.9,
+      },
+    });
+
+    map.addLayer({
       id: LAYER_LABEL,
       type: "symbol",
       source: SOURCE,
@@ -163,7 +187,7 @@ export default function ReplayLayer({ tracks, currentTime, onVesselSingleClick, 
       map.getCanvas().style.cursor = "pointer";
       const p = features[0].properties as any;
       const coords = (features[0].geometry as GeoJSON.Point).coordinates;
-      onHover({ x: e.originalEvent.clientX, y: e.originalEvent.clientY, mmsi: p.mmsi, name: p.name || null, sog: p.sog ?? null, cog: p.cog ?? null, heading: null, lat: coords[1], lon: coords[0], updated_at: null });
+      onHover({ x: e.originalEvent.clientX, y: e.originalEvent.clientY, mmsi: p.mmsi, name: p.name || null, sog: p.sog ?? null, cog: p.cog ?? null, heading: null, lat: coords[1], lon: coords[0], updated_at: p.t ? new Date(p.t * 1000).toISOString() : null });
     };
     const handleMouseLeave = () => { onHover(null); map.getCanvas().style.cursor = ""; };
     map.on("mousemove", LAYER_DOT, handleMouseMove);
@@ -176,6 +200,7 @@ export default function ReplayLayer({ tracks, currentTime, onVesselSingleClick, 
       map.off("mousemove", LAYER_DOT, handleMouseMove);
       map.off("mouseleave", LAYER_DOT, handleMouseLeave);
       if (map.getLayer(LAYER_LABEL)) map.removeLayer(LAYER_LABEL);
+      if (map.getLayer(LAYER_COG)) map.removeLayer(LAYER_COG);
       if (map.getLayer(LAYER_DOT)) map.removeLayer(LAYER_DOT);
       if (map.getSource(SOURCE)) map.removeSource(SOURCE);
       initializedRef.current = false;
@@ -192,12 +217,16 @@ export default function ReplayLayer({ tracks, currentTime, onVesselSingleClick, 
       map.setPaintProperty(LAYER_DOT, "circle-stroke-opacity", [
         "case", ["==", ["get", "mmsi"], followedMmsi], 1, 0.12,
       ]);
+      map.setPaintProperty(LAYER_COG,   "text-opacity", [
+        "case", ["==", ["get", "mmsi"], followedMmsi], 0.9, 0,
+      ]);
       map.setPaintProperty(LAYER_LABEL, "text-opacity", [
         "case", ["==", ["get", "mmsi"], followedMmsi], 1, 0,
       ]);
     } else {
       map.setPaintProperty(LAYER_DOT,   "circle-opacity",       dimOthers ? 0.18 : 0.95);
       map.setPaintProperty(LAYER_DOT,   "circle-stroke-opacity", dimOthers ? 0.18 : 1);
+      map.setPaintProperty(LAYER_COG,   "text-opacity",          dimOthers ? 0 : 0.9);
       map.setPaintProperty(LAYER_LABEL, "text-opacity",          dimOthers ? 0 : 1);
     }
   }, [map, dimOthers, followedMmsi]);
@@ -224,7 +253,7 @@ export default function ReplayLayer({ tracks, currentTime, onVesselSingleClick, 
       features.push({
         type: "Feature",
         geometry: { type: "Point", coordinates: [pos.lon, pos.lat] },
-        properties: { mmsi, name: vessel.name, sog: pos.sog, cog: pos.cog },
+        properties: { mmsi, name: vessel.name, sog: pos.sog, cog: pos.cog, t: pos.t },
       });
     });
     (map.getSource(SOURCE) as maplibregl.GeoJSONSource)?.setData({ type: "FeatureCollection", features });

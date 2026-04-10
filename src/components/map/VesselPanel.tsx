@@ -29,7 +29,10 @@ function fmtCoord(v: number, dir: "lat" | "lon"): string {
 
 function fmtTime(iso: string | null): string {
   if (!iso) return "—";
-  return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  const d = new Date(iso);
+  const local = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  const utc = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit", timeZone: "UTC", hour12: false });
+  return `${local}\n${utc} UTC`;
 }
 
 export default function VesselPanel({ vessel, onClose }: Props) {
@@ -80,7 +83,7 @@ export default function VesselPanel({ vessel, onClose }: Props) {
             <span style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.8px", color: "#5a8090" }}>
               {label}
             </span>
-            <span style={{ fontSize: 12, fontFamily: "monospace", color: "#c8dce8" }}>
+            <span style={{ fontSize: 12, fontFamily: "monospace", color: "#c8dce8", whiteSpace: "pre-line", textAlign: "right" }}>
               {value}
             </span>
           </div>

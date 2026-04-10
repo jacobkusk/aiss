@@ -43,7 +43,7 @@ export default function Tooltip({ data, x, y }: Props) {
             <span style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: "0.7px", color: "#5a8090", flexShrink: 0 }}>
               {label}
             </span>
-            <span style={{ fontSize: 11, fontFamily: "monospace", color: "#c8dce8", textAlign: "right" }}>
+            <span style={{ fontSize: 11, fontFamily: "monospace", color: "#c8dce8", textAlign: "right", whiteSpace: "pre-line" }}>
               {value}
             </span>
           </div>

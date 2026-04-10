@@ -84,18 +84,19 @@ function buildGeoJSON(points: GeoJSON.Feature[], timeRange: [number, number] | n
           ? { type: "gap", prediction_color: GAP.COLOR }
           : { type: "line", prediction_color: "#00e676" },
       });
-      // Live dot (shows as ring + dot, hoverable)
+      // Live dot (shows as ring + dot + COG indicator, same as waypoints)
+      const liveProps: Record<string, unknown> = {
+        mmsi:             livePosition.mmsi,
+        recorded_at:      livePosition.updated_at,
+        prediction_color: "#00e676",
+      };
+      if (livePosition.sog != null)     liveProps.speed   = livePosition.sog;
+      if (livePosition.cog != null)     liveProps.course  = livePosition.cog;
+      if (livePosition.heading != null) liveProps.heading = livePosition.heading;
       features.push({
         type: "Feature",
         geometry: { type: "Point", coordinates: toCoord },
-        properties: {
-          mmsi:             livePosition.mmsi,
-          recorded_at:      livePosition.updated_at,
-          speed:            livePosition.sog,
-          course:           livePosition.cog,
-          heading:          livePosition.heading,
-          prediction_color: "#00e676",
-        },
+        properties: liveProps,
       });
     }
   }

@@ -9,28 +9,37 @@ type Row = [number, number, number, number, number, number, number, number | nul
 
 interface HoverData { x: number; y: number; mmsi: number; name: string | null; sog: number | null; cog: number | null; heading: number | null; lat: number; lon: number; updated_at: string | null; }
 
+interface VesselData {
+  mmsi: number;
+  name: string | null;
+  lat: number;
+  lon: number;
+  sog: number | null;
+  cog: number | null;
+  heading: number | null;
+  updated_at: string | null;
+}
+
 interface Props {
-  onVesselClick: (vessel: {
-    mmsi: number;
-    name: string | null;
-    lat: number;
-    lon: number;
-    sog: number | null;
-    cog: number | null;
-    heading: number | null;
-    updated_at: string | null;
-  }) => void;
+  onVesselClick: (vessel: VesselData) => void;
+  onVesselUpdate?: (vessel: VesselData) => void;
+  selectedMmsi?: number | null;
   onHover: (data: HoverData | null) => void;
   hiddenMmsi?: number | null;
 }
 
 const SOURCE = "vessels";
 const LAYER_DOT = "vessel-dots";
+const LAYER_COG = "vessel-cog";
 const LAYER_LABEL = "vessel-labels";
 
-export default function VesselLayer({ onVesselClick, onHover, hiddenMmsi }: Props) {
+export default function VesselLayer({ onVesselClick, onVesselUpdate, selectedMmsi, onHover, hiddenMmsi }: Props) {
   const map = useMap();
   const timerRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined);
+  const selectedMmsiRef = useRef(selectedMmsi);
+  const onVesselUpdateRef = useRef(onVesselUpdate);
+  useEffect(() => { selectedMmsiRef.current = selectedMmsi; }, [selectedMmsi]);
+  useEffect(() => { onVesselUpdateRef.current = onVesselUpdate; }, [onVesselUpdate]);
 
   useEffect(() => {
     if (!map) return;
@@ -52,6 +61,30 @@ export default function VesselLayer({ onVesselClick, onHover, hiddenMmsi }: Prop
         "circle-stroke-width": 1.5,
         "circle-stroke-color": "#ffffff",
         "circle-opacity": 0.9,
+      },
+    });
+
+    // COG direction dot — small dot on perimeter pointing in direction of travel
+    map.addLayer({
+      id: LAYER_COG,
+      type: "symbol",
+      source: SOURCE,
+      filter: [">=", ["number", ["get", "cog"], -1], 0],
+      layout: {
+        "text-field": "●",
+        "text-size": 8,
+        "text-offset": [0, -1.125],
+        "text-anchor": "center",
+        "text-rotate": ["number", ["get", "cog"], 0],
+        "text-rotation-alignment": "map",
+        "text-allow-overlap": true,
+        "text-ignore-placement": true,
+      },
+      paint: {
+        "text-color": "#ffffff",
+        "text-halo-color": "#020a12",
+        "text-halo-width": 1,
+        "text-opacity": 0.9,
       },
     });
 
@@ -141,6 +174,23 @@ export default function VesselLayer({ onVesselClick, onHover, hiddenMmsi }: Prop
       };
 
       (map?.getSource(SOURCE) as maplibregl.GeoJSONSource | undefined)?.setData(geojson);
+
+      // Opdater selectedVessel løbende hvis den valgte båd er i ny data
+      if (selectedMmsiRef.current != null && onVesselUpdateRef.current) {
+        const match = rows.find((r) => r[0] === selectedMmsiRef.current);
+        if (match) {
+          onVesselUpdateRef.current({
+            mmsi: match[0],
+            name: match[11] || null,
+            lat: match[1],
+            lon: match[2],
+            sog: match[3],
+            cog: match[4],
+            heading: match[5],
+            updated_at: match[10] ? new Date(match[10] * 1000).toISOString() : null,
+          });
+        }
+      }
     }
 
     fetchVessels();
@@ -152,6 +202,7 @@ export default function VesselLayer({ onVesselClick, onHover, hiddenMmsi }: Prop
       map.off("mousemove", LAYER_DOT, handleMouseMove);
       map.off("mouseleave", LAYER_DOT, handleMouseLeave);
       if (map.getLayer(LAYER_LABEL)) map.removeLayer(LAYER_LABEL);
+      if (map.getLayer(LAYER_COG)) map.removeLayer(LAYER_COG);
       if (map.getLayer(LAYER_DOT)) map.removeLayer(LAYER_DOT);
       if (map.getSource(SOURCE)) map.removeSource(SOURCE);
     };
