@@ -106,7 +106,7 @@ export default function ReplayLayer({ tracks, currentTime, onVesselSingleClick, 
       id: LAYER_COG,
       type: "symbol",
       source: SOURCE,
-      filter: [">=", ["number", ["get", "cog"], -1], 0],
+      filter: ["all", [">=", ["number", ["get", "cog"], -1], 0], [">=", ["number", ["get", "sog"], 0], 0.5]],
       layout: {
         "text-field": "●",
         "text-size": 8,
