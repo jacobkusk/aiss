@@ -241,8 +241,8 @@ export default function TrackLayer({ selectedMmsi, onClear, onHover, onWaypointC
       // In replay mode, ReplayLayer owns clearing — never clear here
       if (replayModeRef.current) return;
       // Live mode: don't clear if clicking a vessel dot
-      const dotLayers = map.getLayer("vessel-dots") ? ["vessel-dots"] : [];
-      const dotHit = dotLayers.length ? map.queryRenderedFeatures(e.point, { layers: dotLayers }) : [];
+      const hasLayer = !!map.getLayer("vessel-dots");
+      const dotHit = hasLayer ? map.queryRenderedFeatures(e.point, { layers: ["vessel-dots"] }) : [];
       if (!dotHit.length) {
         (map.getSource(SOURCE) as maplibregl.GeoJSONSource)?.setData({ type: "FeatureCollection", features: [] });
         onClear();
