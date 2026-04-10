@@ -210,7 +210,7 @@ export default function TrackLayer({ selectedMmsi, onClear, onHover, onWaypointC
       id: LAYER_COG,
       type: "symbol",
       source: SOURCE,
-      filter: ["all", ["==", ["geometry-type"], "Point"], ["has", "course"]],
+      filter: ["all", ["==", ["geometry-type"], "Point"], ["has", "course"], [">=", ["number", ["get", "speed"], 0], 0.5]],
       layout: {
         "text-field": "●",
         "text-size": 8,
