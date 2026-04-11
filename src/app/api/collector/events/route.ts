@@ -5,39 +5,39 @@ export const revalidate = 0;
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
 export async function GET(req: NextRequest) {
-  // `since` er unix ms timestamp — ikke seq nummer
   const sinceMs = parseInt(req.nextUrl.searchParams.get("since") ?? "0");
-  const sinceIso = new Date(sinceMs || Date.now() - 10 * 60_000).toISOString();
+  const sinceEpoch = sinceMs ? sinceMs / 1000 : (Date.now() / 1000 - 10 * 60);
 
   try {
     const { data, error } = await supabase
-      .from("entity_last")
-      .select(`entity_id, lat, lon, speed, updated_at, entities!inner(domain_meta, entity_type)`)
-      .eq("entities.entity_type", "vessel")
-      .gt("updated_at", sinceIso)
-      .order("updated_at", { ascending: true })
-      .limit(30);
+      .from("positions")
+      .select("mmsi, lat, lon, sog, t, name")
+      .gt("t", sinceEpoch)
+      .order("t", { ascending: true })
+      .limit(40);
 
+    console.log("[events] data:", data?.length, "error:", error?.message, "sinceEpoch:", sinceEpoch);
     if (error || !data) return NextResponse.json([]);
 
     const events = data.map((row: any, i: number) => {
-      const ts = new Date(row.updated_at).getTime();
-      const mmsi = row.entities?.domain_meta?.mmsi ?? "?"
-      const sog = row.speed ? (row.speed / 0.514444).toFixed(1) : "0.0"
+      const ts = Math.round(row.t * 1000);
+      const sog = row.sog != null ? Number(row.sog).toFixed(1) : "0.0";
+      const label = row.name ?? `MMSI ${row.mmsi}`;
       return {
-        seq: ts * 1000 + i,  // unik: ms timestamp + position i batch
+        seq: ts * 1000 + i,
         t: ts,
         type: "collect" as const,
-        msg: `MMSI ${mmsi}  ${row.lat?.toFixed(4)} ${row.lon?.toFixed(4)}  ${sog}kn`,
+        msg: `${label}  ${Number(row.lat).toFixed(4)} ${Number(row.lon).toFixed(4)}  ${sog}kn`,
       };
     });
 
     return NextResponse.json(events);
-  } catch {
+  } catch (e: any) {
+    console.error("[events] catch:", e?.message);
     return NextResponse.json([]);
   }
 }
