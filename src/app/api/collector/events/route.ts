@@ -20,7 +20,6 @@ export async function GET(req: NextRequest) {
       .order("t", { ascending: true })
       .limit(40);
 
-    console.log("[events] data:", data?.length, "error:", error?.message, "sinceEpoch:", sinceEpoch);
     if (error || !data) return NextResponse.json([]);
 
     const events = data.map((row: any, i: number) => {
@@ -28,7 +27,7 @@ export async function GET(req: NextRequest) {
       const sog = row.sog != null ? Number(row.sog).toFixed(1) : "0.0";
       const label = row.name ?? `MMSI ${row.mmsi}`;
       return {
-        seq: ts * 1000 + i,
+        seq: ts + i,
         t: ts,
         type: "collect" as const,
         msg: `${label}  ${Number(row.lat).toFixed(4)} ${Number(row.lon).toFixed(4)}  ${sog}kn`,
