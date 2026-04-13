@@ -1,0 +1,10 @@
+[Unit]
+Description=AISS Auto-Update Timer (hvert 5. minut)
+
+[Timer]
+OnBootSec=60
+OnUnitActiveSec=300
+AccuracySec=30
+
+[Install]
+WantedBy=timers.target

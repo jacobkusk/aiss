@@ -1,0 +1,17 @@
+[Unit]
+Description=AISS Watchdog (overvåger SDR + ingest + data flow)
+After=ais-ingest.service
+Wants=ais-ingest.service
+
+[Service]
+Type=simple
+User=root
+ExecStart=/bin/bash /home/pi/aiss-site/scripts/pi/watchdog.sh
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=aiss-watchdog
+
+[Install]
+WantedBy=multi-user.target

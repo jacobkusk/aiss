@@ -1,0 +1,22 @@
+[Unit]
+Description=AISS AIS Ingest (rtl_ais → Supabase)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/aiss-site/scripts/pi
+ExecStart=/usr/bin/python3 /home/pi/aiss-site/scripts/pi/ais_to_supabase.py
+Restart=on-failure
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=ais-ingest
+
+# Genstart max 5 gange på 5 minutter — herefter giver systemd op (watchdog tager over)
+StartLimitBurst=5
+StartLimitIntervalSec=300
+
+[Install]
+WantedBy=multi-user.target

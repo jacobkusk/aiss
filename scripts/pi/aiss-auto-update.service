@@ -1,0 +1,12 @@
+[Unit]
+Description=AISS Auto-Update (git pull + restart)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=pi
+ExecStart=/bin/bash /home/pi/aiss-site/scripts/pi/auto-update.sh
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=aiss-update

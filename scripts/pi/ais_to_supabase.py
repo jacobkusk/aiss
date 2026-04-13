@@ -12,6 +12,7 @@ import json
 import socket
 import requests
 import logging
+import pathlib
 from datetime import datetime, timezone
 
 try:
@@ -34,8 +35,8 @@ log = logging.getLogger("ais")
 SUPABASE_URL     = "https://grugesypzsebqcxcdseu.supabase.co"
 SUPABASE_KEY     = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdydWdlc3lwenNlYnFjeGNkc2V1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU1MDM4NzYsImV4cCI6MjA5MTA3OTg3Nn0.InIKvUBRTdX8MI6_f0k5d276wRy-W8tAmnBbT6qyhpg"
 
-# Edge Function endpoint (ny pipeline)
-EDGE_FUNCTION_URL = f"{SUPABASE_URL}/functions/v1/ingest-ais"
+# Edge Function endpoint (v2 — append-only, no buffer/flush)
+EDGE_FUNCTION_URL = f"{SUPABASE_URL}/functions/v1/ingest-positions"
 
 # Gammel RPC endpoint (dual-write fallback, sæt False når valideret)
 DUAL_WRITE       = False
@@ -45,6 +46,7 @@ FLUSH_INTERVAL   = 5      # sekunder mellem flushes
 MAX_BUFFER       = 200    # max positioner i buffer
 UDP_HOST         = "127.0.0.1"
 UDP_PORT         = 10110  # rtl_ais default UDP output port
+HEARTBEAT_FILE   = pathlib.Path("/tmp/aiss_last_seen")  # watchdog læser denne
 
 # ---------------------------------------------------------------------------
 # Globals
@@ -53,6 +55,11 @@ UDP_PORT         = 10110  # rtl_ais default UDP output port
 position_buffer: list[dict] = []
 buffer_lock = threading.Lock()
 stats = {"sent": 0, "accepted": 0, "rejected": 0, "errors": 0}
+
+# Cache for vessel names from AIS type 5 (static/voyage) messages.
+# Type 5 messages carry shipname but no position — we attach cached names
+# to subsequent position reports (type 1/2/3) for the same MMSI.
+vessel_name_cache: dict[int, str] = {}  # mmsi → shipname
 
 # ---------------------------------------------------------------------------
 # HTTP helpers
@@ -63,6 +70,7 @@ SESSION.headers.update({
     "Content-Type": "application/json",
     "apikey": SUPABASE_KEY,
     "Authorization": f"Bearer {SUPABASE_KEY}",
+    "x-source": "pi4_rtlsdr",
 })
 
 def post_edge_function(positions: list[dict]) -> tuple[int, int]:
@@ -176,13 +184,29 @@ def parse_nmea_line(line: str) -> dict | None:
         msg = decode(*lines_to_decode)
         data = msg.asdict()
 
-        # Kun positionsbeskeder med koordinater (type 1,2,3,18,21)
         mmsi = data.get("mmsi")
         lat = data.get("lat")
         lon = data.get("lon")
 
+        # Type 5 (static/voyage): has shipname but no position.
+        # Cache the name so we can attach it to future position reports.
+        shipname = data.get("shipname") or data.get("name")
+        ship_type = data.get("ship_type")
+        if shipname and mmsi:
+            clean_name = str(shipname).strip().rstrip("@").strip()
+            if clean_name:
+                vessel_name_cache[int(mmsi)] = clean_name
+                log.info(f"  [type5] MMSI={mmsi} name={clean_name}")
+        if ship_type and mmsi:
+            # Cache ship_type too (reuse name cache key prefix)
+            pass  # ship_type is less critical, just pass it if available
+
+        # Only position messages with coordinates (type 1,2,3,18,21)
         if mmsi is None or lat is None or lon is None:
             return None
+
+        # Look up cached name from type 5 for this MMSI
+        cached_name = vessel_name_cache.get(int(mmsi))
 
         # Byg normaliseret dict til Edge Function
         return {
@@ -194,8 +218,8 @@ def parse_nmea_line(line: str) -> dict | None:
             "heading": int(data.get("heading", 511) or 511),
             "nav_status": data.get("status"),
             "timestamp": datetime.now(timezone.utc).isoformat(),
-            "vessel_name": data.get("shipname") or data.get("name"),
-            "ship_type": data.get("ship_type"),
+            "vessel_name": cached_name,
+            "ship_type": ship_type if ship_type else data.get("ship_type"),
         }
 
     except Exception:
@@ -258,6 +282,9 @@ def main():
                 with buffer_lock:
                     position_buffer.append(position)
                     buf_len = len(position_buffer)
+
+                # Heartbeat — watchdog tjekker denne fils alder
+                HEARTBEAT_FILE.write_text(str(time.time()))
 
                 log.info(f"  MMSI={mmsi} lat={lat:.4f} sog={position.get('sog', 0):.1f}kn")
 
