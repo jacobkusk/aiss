@@ -1,39 +1,15 @@
--- Three overloads called from app code:
---   1. by entity_id  → returns an array of [lon, lat, z, m] coords
---   2. by mmsi       → returns { coords, gaps } for the full track
---   3. by mmsi + [p_start, p_end] → same shape, time-windowed with gaps
---      trimmed to the overlap
--- All overloads read the most recently compressed track for the entity.
+-- Two overloads called from app code:
+--   1. by mmsi                       → returns { coords, gaps } for the full track
+--   2. by mmsi + [p_start, p_end]    → same shape, time-windowed with gaps
+--                                      trimmed to the overlap
+-- Both read the most recently compressed track for the entity.
+--
+-- The old (p_entity_id uuid) overload was dropped on 2026-04-16 — it had no
+-- callers anywhere in src/ and was left over from the pre-UUID-migration era
+-- when the app routed by entity_id directly. Add it back (and update this
+-- header) the day something needs to fetch by entity_id instead of mmsi.
 
--- Overload 1: by entity_id
-CREATE OR REPLACE FUNCTION public.get_track_geojson(p_entity_id uuid)
- RETURNS jsonb
- LANGUAGE sql
- STABLE SECURITY DEFINER
-AS $function$
-  WITH latest_track AS (
-    SELECT track
-    FROM tracks
-    WHERE entity_id = p_entity_id
-    ORDER BY compressed_at DESC
-    LIMIT 1
-  ),
-  pts AS (
-    SELECT (ST_DumpPoints(track::geometry)).geom AS geom
-    FROM latest_track
-  )
-  SELECT COALESCE(
-    jsonb_agg(
-      jsonb_build_array(ST_X(geom), ST_Y(geom), ST_Z(geom), ST_M(geom))
-      ORDER BY ST_M(geom)
-    ),
-    '[]'::jsonb
-  )
-  FROM pts
-  WHERE ST_M(geom) IS NOT NULL
-$function$;
-
--- Overload 2: by mmsi — includes gap_intervals
+-- Overload 1: by mmsi — includes gap_intervals
 CREATE OR REPLACE FUNCTION public.get_track_geojson(p_mmsi bigint)
  RETURNS jsonb
  LANGUAGE sql
@@ -72,7 +48,7 @@ AS $function$
   )
 $function$;
 
--- Overload 3: by mmsi + time window (epoch seconds)
+-- Overload 2: by mmsi + time window (epoch seconds)
 CREATE OR REPLACE FUNCTION public.get_track_geojson(
   p_mmsi bigint,
   p_start double precision DEFAULT NULL::double precision,

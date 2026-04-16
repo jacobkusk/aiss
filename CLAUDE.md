@@ -86,9 +86,10 @@ aiss/
 │   ├── functions/         # edge functions (Deno)
 │   └── functions-sql/     # live SQL/plpgsql functions
 ├── scripts/pi/            # Raspberry Pi collector (rtl_ais → Supabase)
-├── docs/                  # project docs (PI-OPS, self-healing, …)
-└── public/fonts/          # JetBrains Mono
+└── docs/                  # project docs (PI-OPS, self-healing, …)
 ```
+
+JetBrains Mono loades via `next/font/google` — ingen lokale font-filer i `public/`.
 
 ## Design Rules
 
