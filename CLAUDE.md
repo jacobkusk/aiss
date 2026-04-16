@@ -204,4 +204,4 @@ Epsilon til arkiv: ~50 m (ikke 500 m). Ét spor ser korrekt ud ved alle zoom-niv
 4. **OpenFreeMap** — skift `Map.tsx` fra Carto raster til OpenFreeMap vector tiles.
 5. **Lock-mode + play** — lås skib i centrum, scrubber timeRange 1x/10x/100x.
 6. **Record** — MediaRecorder API → `.webm`/GIF af kort-canvas.
-7. **PI rejection debugging** — PI viser ~33 % rejected i `ingest_stats`. Find ud af hvorfor (duplikater? RLS på ny partition? ugyldige koordinater?).
+7. **Teleportation → anomalies table** — PI rejection-raten er faktisk sund (0.91 % på 2026-04-16), men 191/194 rejects er `teleportation` = gyldigt signal om spoofing/GPS-glitch/kollision-risiko. Skal logges til `anomalies`-tabellen (severity `warn`) i stedet for bare at blive tabt som reject-counter. `ingest-positions` edge: på `teleportation` reject → kald `write_anomaly` RPC før retur.

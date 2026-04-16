@@ -1,10 +1,19 @@
-// ingest-positions — Supabase Edge Function (v7)
+// ingest-positions — Supabase Edge Function (v8)
 // Append-only ingest with full-accounting rejection observability.
 //
 // Normalise → validate → INSERT positions_v2 + UPSERT entity_last via
 // ingest_positions_v2 RPC. Rejections are classified per reason and
 // persisted to ingest_stats.reject_reasons so PI rejection rate is visible
 // in SQL, not just in the Edge Function console.
+//
+// Changes vs v7:
+//   - Teleportation rejects → write_anomalies_batch RPC. The intra-batch
+//     anti-teleportation check already catches impossible hops (MMSI hijack,
+//     spoofing, GPS glitch). Up to v7 we just threw the offending row away
+//     and bumped a counter. Now we keep the evidence: prev lat/lon/t, next
+//     lat/lon/t, computed speed m/s, dt seconds — written to the anomalies
+//     table as severity='warn'. Best-effort: a failing anomaly log never
+//     breaks the main ingest path.
 //
 // Changes vs v6:
 //   - Fix: supabase-js rpc() returns a PostgrestBuilder (PromiseLike), not
@@ -65,6 +74,25 @@ type RejectReason =
   | "teleportation"
   | "duplicate_within_batch"
 
+// Evidence row for the anomalies table — populated on teleportation rejects.
+interface TeleportEvidence {
+  mmsi: number
+  anomaly_type: "teleportation"
+  severity: "warn"
+  details: {
+    prev_lat: number
+    prev_lon: number
+    prev_t: number
+    lat: number
+    lon: number
+    t: number
+    dist_m: number
+    dt_s: number
+    speed_ms: number
+    max_speed_ms: number
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
@@ -106,6 +134,7 @@ function normalizeAndValidate(
   raw: RawPosition,
   prevByMmsi: Map<number, { lat: number; lon: number; t: number }>,
   bump: (reason: RejectReason) => void,
+  anomalies: TeleportEvidence[],
 ): NormalizedRow | null {
   const mmsi = toNum(raw.mmsi ?? raw.MMSI)
   // Widened range — accept base stations, AtoN, SAR aircraft, beacons.
@@ -157,6 +186,23 @@ function normalizeAndValidate(
     // Only flag teleportation when we have real forward motion to compare.
     if (dtSec > 0 && dist / dtSec > MAX_SPEED_MS) {
       bump("teleportation")
+      anomalies.push({
+        mmsi,
+        anomaly_type: "teleportation",
+        severity: "warn",
+        details: {
+          prev_lat: prev.lat,
+          prev_lon: prev.lon,
+          prev_t: prev.t,
+          lat,
+          lon,
+          t,
+          dist_m: Math.round(dist),
+          dt_s: Math.round(dtSec * 10) / 10,
+          speed_ms: Math.round((dist / dtSec) * 10) / 10,
+          max_speed_ms: MAX_SPEED_MS,
+        },
+      })
       return null
     }
   }
@@ -250,9 +296,10 @@ async function handle(req: Request): Promise<Response> {
   // --- Normalise + validate all rows ---
   const prevByMmsi = new Map<number, { lat: number; lon: number; t: number }>()
   const valid: NormalizedRow[] = []
+  const anomalies: TeleportEvidence[] = []
 
   for (const raw of rawRows) {
-    const row = normalizeAndValidate(raw, prevByMmsi, bump)
+    const row = normalizeAndValidate(raw, prevByMmsi, bump, anomalies)
     if (row) valid.push(row)
   }
 
@@ -264,6 +311,23 @@ async function handle(req: Request): Promise<Response> {
     Deno.env.get("SUPABASE_URL") ?? "",
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
   )
+
+  // Best-effort anomaly logging. Teleportation rejects are evidence, not noise —
+  // keep the prev/next pair for later analysis (spoofing, MMSI hijack, GPS glitch).
+  // A failing anomaly log must NEVER break the main ingest path.
+  if (anomalies.length > 0) {
+    try {
+      const { error: anomErr } = await supabase.rpc("write_anomalies_batch", {
+        p_rows: anomalies,
+        p_source_name: sourceName,
+      })
+      if (anomErr) {
+        console.error("[ingest-positions] anomaly log error:", anomErr.message)
+      }
+    } catch (e) {
+      console.error("[ingest-positions] anomaly log exception:", (e as Error).message)
+    }
+  }
 
   // Early exit: nothing valid — still log the batch so rejection rate is visible.
   if (valid.length === 0) {
@@ -285,6 +349,7 @@ async function handle(req: Request): Promise<Response> {
       edge_rejected: edgeRejected,
       rpc_rejected: 0,
       reject_reasons: reasons,
+      anomalies_logged: anomalies.length,
       source: sourceName,
     })
   }
@@ -341,7 +406,7 @@ async function handle(req: Request): Promise<Response> {
   console.log(
     `[ingest-positions] source=${sourceName} batch=${rawRows.length} ` +
     `accepted=${rpcAccepted} edge_rejected=${edgeRejected} rpc_rejected=${rpcRejected} ` +
-    `reasons=${JSON.stringify(reasons)}`
+    `anomalies=${anomalies.length} reasons=${JSON.stringify(reasons)}`
   )
 
   return new Response(JSON.stringify({
@@ -351,6 +416,7 @@ async function handle(req: Request): Promise<Response> {
     rpc_rejected: rpcRejected,
     reject_reasons: reasons,
     rpc_reject_reasons: result?.reject_reasons ?? {},
+    anomalies_logged: anomalies.length,
     source: sourceName,
   }), {
     status: 200,
