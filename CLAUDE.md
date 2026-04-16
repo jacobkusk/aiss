@@ -2,6 +2,8 @@
 
 Landing page + live map + API docs for aiss.network — the open maritime evidence protocol.
 
+> **Kanonisk arkitektur og API-kontrakt ligger i `~/Ventures/shared/`** (`ARCHITECTURE.md`, `AISS-API-CONTRACT.md`, `AISS.md`, `GLOSSARY.md`). Denne fil beskriver aiss.network-specifikke konventioner og "do NOT"-regler. Ved uoverensstemmelse: `shared/` vinder.
+
 ## Stack
 
 - Next.js 16 (App Router, TypeScript)

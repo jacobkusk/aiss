@@ -25,15 +25,19 @@ De tekniske komponenter er kendte: PostGIS, Douglas-Peucker, Merkle-træer, Mult
 
 ### Tabeller
 
+> Kanonisk skema er beskrevet i `~/Ventures/shared/ARCHITECTURE.md`. Tabellerne herunder er aiss.network's implementering af det skema.
+
 | Tabel | Indhold | Rolle |
 |---|---|---|
-| `entities` | én række per skib / sensor / drone | identitet + `domain_meta` (MMSI, ship_type, callsign …) |
+| `entities` | én række per skib / sensor / drone | identitet + `domain_meta` (MMSI, ship_type, callsign …) + vault-felter `visibility` / `owner_id` / `retention` |
 | `entity_last` | seneste position per entity | live dot på kortet |
 | `positions_v2` | rå fixes, partitioneret per dag | bevismateriale, aldrig rørt efter indsæt |
-| `tracks` | Douglas-Peucker-komprimeret spor | `merkle_root`, `segment_hashes[]`, `encrypted_dek`, signaturens hale |
+| `positions_v2_historical` | ældre rullede positioner | langtidsarkiv |
+| `tracks` | Douglas-Peucker-komprimeret spor | `merkle_root`, `segment_hashes[]`, `encrypted_dek`, `permanent_address`, `epsilon_m`, `jurisdiction` |
 | `strings` | `MultiLineStringM` per entity per dato | linjen du ser på kortet |
-| `evidence` | append-only hash-kæde (`hash`, `prev_hash`, `pts`) | tamper-proof audit trail |
-| `ingest_sources` + `ingest_stats` | registrerede collectors og deres flush-statistik | `accepted` / `rejected` per batch |
+| `evidence` | append-only hash-kæde (`hash`, `prev_hash`, `pts`, `validation_meta`) | tamper-proof audit trail |
+| `anomalies` | append-only log af detekterede inkonsistenser | spoof-kandidater, source-konflikter, null-island fixes — bevis om beviset |
+| `ingest_sources` + `ingest_stats` | registrerede collectors og deres flush-statistik | `accepted` / `rejected` per batch, `public_delay_hours` per kilde |
 | `heal_log`, `rpc_health`, `alert_state` | selvhelende drift | systemet holder sig selv i live |
 
 ### Huller er information

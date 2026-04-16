@@ -11,6 +11,8 @@ Dette er ét af tre projekter der udvikles sideløbende:
 - **vier.blue** (`waveo.blue`-mappen) — port 3002 — Supabase: orkydlnqeurgcwaljnte
 - **waveo.blue** (ikke bygget endnu) — port 3001
 
+> **Kanoniske docs på tværs af alle tre projekter ligger i `~/Ventures/shared/`** — `ARCHITECTURE.md` (tabelmodel), `AISS-API-CONTRACT.md` (API waveo/vier spiser), `PROJECTS.md` (produktkonstellation), `GLOSSARY.md`. Læs dem før arkitekturbeslutninger.
+
 Ingen beslutning tages i ét projekt uden at tjekke om det påvirker de andre — AIS-pipelinen bor kun her, og de to andre projekter læser via API.
 
 **Tech stack er identisk på tværs af alle tre:**
