@@ -1,3 +1,15 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// .aiss PROTOCOL SCAFFOLDING — not yet wired into any runtime path.
+//
+// This factory + the src/adapters/ + src/formats/aiss/v1/ tree together form
+// the planned foundation for the .aiss file format (magic bytes "AISS",
+// Merkle-root signed, per-recipient encryption). See src/formats/aiss/v1/
+// schema.ts for the structural definition.
+//
+// Nothing calls these factories today. Do NOT delete as dead code —
+// they are the implementation target for aiss:full.
+// ─────────────────────────────────────────────────────────────────────────────
+
 import { SupabaseStorageAdapter } from "../adapters/storage/supabase"
 import { Sha256MerkleSignatureAdapter } from "../adapters/signature/sha256merkle"
 import { AisIngestAdapter } from "../adapters/ingest/ais"

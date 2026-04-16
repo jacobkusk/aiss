@@ -9,15 +9,23 @@ const supabase = createClient(
 );
 
 export async function GET() {
-  const [statsResult, rpcHealthResult] = await Promise.all([
+  const [statsResult, rpcHealthResult, liveResult] = await Promise.all([
     supabase.rpc("get_system_stats"),
     supabase.rpc("get_rpc_health"),
+    supabase
+      .from("positions_v2")
+      .select("entity_id", { count: "exact", head: false })
+      .gt("created_at", new Date(Date.now() - 2 * 60 * 1000).toISOString()),
   ]);
 
   if (statsResult.error) return NextResponse.json({ error: statsResult.error.message }, { status: 500 });
 
+  // Count unique vessels seen in last 2 min
+  const uniqueIds = new Set((liveResult.data ?? []).map((r: { entity_id: string }) => r.entity_id));
+
   return NextResponse.json({
     ...statsResult.data,
     rpc_health: rpcHealthResult.data ?? [],
+    vessels_live_2min: uniqueIds.size,
   });
 }

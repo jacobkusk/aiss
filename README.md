@@ -7,31 +7,35 @@
 
 ## Hvad er AISS
 
-AISS er ikke et AIS-værktøj. Det er et **maritimtvidnesystem** — kryptografisk sikret, permanent bevisførelse for havets trafik.
+AISS er ikke et AIS-værktøj. Det er et **maritimt vidnesystem** — kryptografisk sikret, permanent bevisførelse for havets trafik.
 
-De tekniske komponenter er kendte: PostGIS, Douglas-Peucker, Merkle-træer, MultiLineString. Det nye er kombinationen anvendt på et specifikt juridisk og maritimtvidneproblem.
+De tekniske komponenter er kendte: PostGIS, Douglas-Peucker, Merkle-træer, MultiLineString, per-recipient envelope encryption. Det nye er kombinationen anvendt på et specifikt juridisk og maritimt vidneproblem.
 
 ### Hvad der adskiller AISS
 
 1. **Signerede huller som bevis** — et hul i sporet er ikke en fejl, det er en dokumenteret fact der ikke kan udfyldes retroaktivt
-2. **Permanent evidenskæde** — ingen cleanup, ingen retention, aldrig slettet
-3. **Multi-source med kildeattribution** — aisstream, AISHub, radar, satellit, plotter crowd — alle sporbare til kilde
-4. **Crowd-sourcet observation i evidensmodel** — 47 uafhængige observatører der ser samme skib = stærk corroboration
+2. **Permanent evidenskæde** — hash-kædet, aldrig slettet, aldrig overskrevet
+3. **Multi-source med kildeattribution** — aisstream, AISHub, RTL-SDR, satellit, plotter crowd — alle sporbare til kilde
+4. **Crowd-sourcet observation i evidensmodel** — N uafhængige observatører der ser samme skib = stærk corroboration
 5. **`.aiss` som open evidence standard** — et format myndigheder, forsikring og retter kan stole på
 
 ---
 
 ## Arkitektur
 
-### De 5 tabeller
+### Tabeller
 
-| Tabel | Type | Formål |
+| Tabel | Indhold | Rolle |
 |---|---|---|
-| `ais_string` | `MultiLineStringM` | Komplet spor per skib, for evigt |
-| `ais_line_events` | append-only | SHA-256 hash-kæde, Bitcoin-forankret |
-| `vessel_readings` | JSONB | Sensordata, schema-fri |
-| `ais_last` | row per MMSI | Seneste position (live prik) |
-| `ais_tail` | JSONB array | 20 nyeste punkter (gul hale) |
+| `entities` | én række per skib / sensor / drone | identitet + `domain_meta` (MMSI, ship_type, callsign …) |
+| `entity_last` | seneste position per entity | live dot på kortet |
+| `positions_v2` | rå fixes, partitioneret per dag | bevismateriale, aldrig rørt efter indsæt |
+| `tracks` | Douglas-Peucker-komprimeret spor | `merkle_root`, `segment_hashes[]`, `encrypted_dek`, signaturens hale |
+| `strings` | `MultiLineStringM` per entity per dato | linjen du ser på kortet |
+| `evidence` | append-only hash-kæde (`hash`, `prev_hash`, `pts`) | tamper-proof audit trail |
+| `ingest_sources` + `ingest_stats` | registrerede collectors og deres flush-statistik | `accepted` / `rejected` per batch |
+| `pi_health`, `heal_log`, `rpc_health`, `alert_state` | selvhelende drift | systemet holder sig selv i live |
+| `spoof_flags` | MMSI-level anomali / spoof-detektioner | beskyttelse mod manipuleret trafik |
 
 ### Huller er information
 
@@ -43,34 +47,34 @@ Segment 2:                      ●────●────●
 Segment 3:                                  ●────●
 ```
 
-`merged_track` er **ikke en tabel** — det er en query. Afledte views gemmes aldrig som primær kilde. Bevislinjen holdes ren.
+`tracks.gap_intervals` gemmer hullerne eksplicit. Et hul er aldrig interpoleret bort. Afledte visualiseringer (LINE, D·P) er queries, ikke primær kilde — bevislinjen holdes ren.
 
 ### Datakilder
 
 | Kilde | Type | Status |
 |---|---|---|
-| aisstream.io | Terrestrisk AIS | Aktiv |
-| AISHub | Worldwide HTTP poll | Aktiv |
-| RTL-SDR | Egen modtagelse | Planlagt |
+| RTL-SDR (Raspberry Pi) | Terrestrisk AIS | **Aktiv** (`pi4_rtlsdr`) |
+| aisstream.io | Terrestrisk AIS, stream | Konfigureret, inaktiv |
+| AISHub | Worldwide HTTP poll | Konfigureret, inaktiv |
 | Satellit-AIS | S-AIS | Planlagt |
 | Passiv radar | Position uden MMSI | Planlagt |
-| OpenCPN/Orca/Garmin | Plotter crowd upload | Planlagt |
-| Soft-AIS/GPS | App ombord | Planlagt |
+| OpenCPN / Orca / Garmin | Plotter crowd upload | Planlagt |
+| Soft-AIS / GPS | App ombord | Planlagt |
 
 ### Storage
 
-Kompressionsforhold ~700x via Douglas-Peucker:
-Et år med 500.000 skibe ≈ **275 GB**. Rå AIS ville være ~180 TB.
+Kompressionsforhold ~700× via Douglas-Peucker. Et år med 500 000 skibe ≈ **275 GB**. Rå AIS ville være ~180 TB.
 
 ---
 
-## Tech Stack
+## Tech stack
 
-- **Framework:** Next.js (App Router)
+- **Framework:** Next.js 16 (App Router)
 - **Sprog:** TypeScript
-- **Map:** MapLibre GL JS
-- **Database:** Supabase / PostgreSQL + PostGIS (`grugesypzsebqcxcdseu`)
-- **Collector:** Node.js + PM2 på Mac mini (`/Users/jacobkusk/aiss-collector`)
+- **Map:** MapLibre GL JS (globe + flat, intet andet kortbibliotek)
+- **Database:** Supabase / PostgreSQL + PostGIS (`grugesypzsebqcxcdseu`, eu-west-1)
+- **Collector:** Raspberry Pi 4 + RTL-SDR → Supabase RPC (`scripts/pi/ais_to_supabase.py`)
+- **Edge Functions:** Deno (`supabase/functions/`)
 
 ---
 
@@ -78,12 +82,13 @@ Et år med 500.000 skibe ≈ **275 GB**. Rå AIS ville være ~180 TB.
 
 ```bash
 npm install
-npm run dev    # localhost:3001
+npm run dev      # localhost:3000 (port 3000 er låst til aiss)
 npm run build
 npm run lint
 ```
 
 Kræver `.env.local`:
+
 ```
 NEXT_PUBLIC_SUPABASE_URL=...
 NEXT_PUBLIC_SUPABASE_ANON_KEY=...
@@ -91,17 +96,18 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=...
 
 ---
 
-## .aiss container-format
+## `.aiss` container-format
 
 ```
 Magic:    0x41 0x49 0x53 0x53  ("AISS")
 Version:  1 byte
-Header:   mmsi, vessel_name, created_at, merkle_root
+Header:   entity_id, merkle_root, created_at, recipient_keys (ECDH-P256)
 Segments: [{gap_before_sec, source, points:[lon,lat,t,sog,cog,hdg]}, ...]
 Chain:    merkle events (offline verifikation)
+Payload:  encrypted with per-recipient envelope
 ```
 
-En `.aiss`-fil er hele skibets tamper-proof historik i ét objekt. Kan emailes til en advokat. Verificeres offline. GPX er kompatibilitetsformatet udadtil.
+En `.aiss`-fil er hele skibets tamper-proof historik i ét objekt. Kan emailes til en advokat, verificeres offline. Scaffolding findes i `src/adapters/`, `src/core/`, `src/formats/aiss/v1/` — endnu ikke wired ind i runtime, men skemaet ligger fast.
 
 ---
 
@@ -110,3 +116,5 @@ En `.aiss`-fil er hele skibets tamper-proof historik i ét objekt. Kan emailes t
 **aiss.network** — gratis, åben. Bygger netværket og troværdigheden.
 
 **waveo.blue** — betalt. Søfartsstyrelsen, forsikring, fiskeri, advokater. Watchlists, sager, geofence alerts, eksport af `.aiss` som juridisk dokument.
+
+**vier.blue** — demo + privat-klient-visning af `.aiss` data. Bruger aiss.network API, ingen egen AIS-pipeline.

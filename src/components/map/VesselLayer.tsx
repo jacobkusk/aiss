@@ -66,23 +66,13 @@ export default function VesselLayer({ onVesselClick, onVesselUpdate, selectedMms
           100, "#00e676", // bright green when fresh
         ],
         "circle-stroke-width": 0,
-<<<<<<< Updated upstream
-        // Opacity driven by freshness: 100 -> 0.9, 10 -> 0.25
-        "circle-opacity": [
-          "interpolate", ["linear"], ["get", "freshness"],
-          0, 0.15,
-          10, 0.25,
-          50, 0.5,
-          100, 0.9,
-=======
-        // Opacity driven by freshness: 100 -> 0.9, 10 -> 0.4 (more visible for old data)
+        // Opacity driven by freshness: 100 -> 0.95, 10 -> 0.5 (more visible for old data)
         "circle-opacity": [
           "interpolate", ["linear"], ["get", "freshness"],
           0, 0.4,
           10, 0.5,
           50, 0.7,
           100, 0.95,
->>>>>>> Stashed changes
         ],
       },
     });
@@ -131,21 +121,12 @@ export default function VesselLayer({ onVesselClick, onVesselUpdate, selectedMms
       },
       paint: {
         "text-color": "#c8dce8",
-<<<<<<< Updated upstream
-        // Labels fade with freshness
-        "text-opacity": [
-          "interpolate", ["linear"], ["get", "freshness"],
-          0, 0,
-          10, 0.15,
-          50, 0.5,
-=======
         // Labels fade with freshness (increased min opacity for old vessels)
         "text-opacity": [
           "interpolate", ["linear"], ["get", "freshness"],
           0, 0.3,
           10, 0.4,
           50, 0.65,
->>>>>>> Stashed changes
           100, 1,
         ],
       },
@@ -209,16 +190,6 @@ export default function VesselLayer({ onVesselClick, onVesselUpdate, selectedMms
           type: "Feature",
           geometry: { type: "Point", coordinates: [r.lon, r.lat] },
           properties: {
-<<<<<<< Updated upstream
-            mmsi: r[0],
-            name: r[11] || null,
-            sog: r[3],
-            cog: r[4],
-            heading: r[5],
-            freshness: r[6] ?? 100,  // 0-100 freshness score from DB
-            updated_at: r[10] ? new Date(r[10] * 1000).toISOString() : null,
-            stale: (r[6] ?? 100) < 30,
-=======
             mmsi: r.mmsi,
             name: r.name || null,
             sog: r.sog,
@@ -227,7 +198,6 @@ export default function VesselLayer({ onVesselClick, onVesselUpdate, selectedMms
             freshness: r.freshness ?? 100,
             updated_at: r.updated_epoch_sec ? new Date(r.updated_epoch_sec * 1000).toISOString() : null,
             stale: (r.freshness ?? 100) < 30,
->>>>>>> Stashed changes
           },
         })),
       };
@@ -295,11 +265,7 @@ export default function VesselLayer({ onVesselClick, onVesselUpdate, selectedMms
       ]);
       map.setPaintProperty(LAYER_DOT, "circle-opacity", [
         "interpolate", ["linear"], ["get", "freshness"],
-<<<<<<< Updated upstream
-        0, 0.15, 10, 0.25, 50, 0.5, 100, 0.9,
-=======
         0, 0.4, 10, 0.5, 50, 0.7, 100, 0.95,
->>>>>>> Stashed changes
       ]);
       map.setPaintProperty(LAYER_COG, "text-opacity", [
         "interpolate", ["linear"], ["get", "freshness"],
@@ -307,11 +273,7 @@ export default function VesselLayer({ onVesselClick, onVesselUpdate, selectedMms
       ]);
       map.setPaintProperty(LAYER_LABEL, "text-opacity", [
         "interpolate", ["linear"], ["get", "freshness"],
-<<<<<<< Updated upstream
-        0, 0, 10, 0.15, 50, 0.5, 100, 1,
-=======
         0, 0.3, 10, 0.4, 50, 0.65, 100, 1,
->>>>>>> Stashed changes
       ]);
     }
   }, [map, selectedMmsi]);

@@ -41,6 +41,7 @@ interface SystemStats {
   vessels_growth:      GrowthPoint[];
   sources:             Source[];
   rpc_health:          RpcHealth[];
+  vessels_live_2min:   number;
 }
 
 const STATUS_COLOR: Record<string, string> = {
@@ -168,6 +169,27 @@ export default function HealthPage() {
       </div>
       <div style={{ fontSize: 12, color: "#4a6878", marginBottom: 32 }}>
         Realtidsoverblik over AISS platformen — database, datakilder og aktivitet.
+      </div>
+
+      {/* LIVE PI RECEPTION */}
+      <div style={{ marginBottom: 28 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 2, color: "#4a6878", textTransform: "uppercase", marginBottom: 12 }}>
+          📡 Pi modtager lige nu
+        </div>
+        <div style={{ background: "rgba(0,230,118,0.04)", border: "1px solid rgba(0,230,118,0.2)", borderRadius: 10, padding: "20px 24px", display: "flex", alignItems: "center", gap: 24 }}>
+          <div>
+            <div style={{ fontSize: 48, fontWeight: 800, color: "#00e676", lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>
+              {stats?.vessels_live_2min ?? 0}
+            </div>
+            <div style={{ fontSize: 12, color: "#c0d4dc", marginTop: 6, fontWeight: 600 }}>skibe inden for rækkevidde</div>
+            <div style={{ fontSize: 10, color: "#4a6878", marginTop: 2 }}>set de seneste 2 minutter</div>
+          </div>
+          <div style={{ width: 1, height: 60, background: "rgba(255,255,255,0.06)" }} />
+          <div style={{ fontSize: 12, color: "#4a6878", lineHeight: 1.7 }}>
+            Positioner modtaget via RTL-SDR → AIS-catcher → Supabase.<br />
+            Opdateres hvert 20s.
+          </div>
+        </div>
       </div>
 
       {/* DATABASE STATS */}
