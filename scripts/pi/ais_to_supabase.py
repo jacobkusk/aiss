@@ -192,27 +192,54 @@ def flush_loop():
             stats["errors"] += 1
 
 # ---------------------------------------------------------------------------
-# Vessel name cache (Type 5 → position enrichment + DB persistering)
+# Vessel static data cache (Type 5 / Type 19 → position enrichment + DB persist)
 # ---------------------------------------------------------------------------
 
-vessel_name_cache: dict[int, str] = {}  # mmsi → skibsnavn
+# In-RAM caches. Dør ved restart — hvilket er OK fordi skibe retransmitterer
+# Type 5 hvert 6. minut, så cachen warmer op igen automatisk.
+vessel_name_cache: dict[int, str] = {}    # mmsi → skibsnavn (til position enrichment)
+vessel_static_cache: dict[int, dict] = {}  # mmsi → sidst-sendte static snapshot
 
-def persist_vessel_name(mmsi: int, name: str):
-    """Gem skibsnavn til entities.display_name i Supabase (kører i baggrundstråd)."""
+def persist_vessel_static(
+    mmsi: int,
+    ship_type=None,
+    callsign=None,
+    imo=None,
+    destination=None,
+    shipname=None,
+):
+    """Call upsert_vessel_static RPC i baggrundstråd.
+
+    Erstatter den gamle persist_vessel_name: vi gemmer nu hele Type 5-payloaden
+    i én RPC (ship_type, callsign, imo, destination, shipname) i stedet for
+    bare navnet via REST PATCH. Det er canonical write-path for alle static
+    fields jf. supabase/functions-sql/upsert_vessel_static.sql.
+    """
     try:
-        resp = SESSION.patch(
-            f"{SUPABASE_URL}/rest/v1/entities",
-            params={"domain_meta->>mmsi": f"eq.{mmsi}"},
-            json={"display_name": name},
-            headers={"Prefer": "return=minimal"},
+        resp = SESSION.post(
+            f"{SUPABASE_URL}/rest/v1/rpc/upsert_vessel_static",
+            json={
+                "p_mmsi": int(mmsi),
+                "p_ship_type": int(ship_type) if ship_type else None,
+                "p_callsign": callsign,
+                "p_imo": int(imo) if imo else None,
+                "p_destination": destination,
+                "p_shipname": shipname,
+            },
             timeout=5,
         )
         if resp.status_code in (200, 204):
-            log.info(f"  [name→db] MMSI={mmsi} '{name}' gemt")
+            log.info(
+                f"  [static→db] MMSI={mmsi} ship_type={ship_type} "
+                f"name={shipname!r} callsign={callsign!r}"
+            )
         else:
-            log.warning(f"  [name→db] MMSI={mmsi} fejl {resp.status_code}: {resp.text[:100]}")
+            log.warning(
+                f"  [static→db] MMSI={mmsi} fejl {resp.status_code}: "
+                f"{resp.text[:200]}"
+            )
     except Exception as e:
-        log.warning(f"  [name→db] MMSI={mmsi} exception: {e}")
+        log.warning(f"  [static→db] MMSI={mmsi} exception: {e}")
 
 # ---------------------------------------------------------------------------
 # NMEA parser — bruger pyais til at decode !AIVDM sætninger
@@ -258,19 +285,48 @@ def parse_nmea_line(line: str) -> dict | None:
         lat = data.get("lat")
         lon = data.get("lon")
 
-        # Type 5 (static/voyage): skibsnavn uden position.
-        # Cache + gem straks til DB så replay altid har det.
+        # Type 5/19/24 (static/voyage): ship_type + callsign + imo + destination + shipname.
+        # Dedupe per-MMSI på hele snapshottet — Type 5 retransmitteres hvert
+        # 6. minut, så vi spammer kun DB når noget faktisk ændrer sig.
         shipname = data.get("shipname") or data.get("name")
         ship_type = data.get("ship_type")
-        if shipname and mmsi:
-            clean_name = str(shipname).strip().rstrip("@").strip()
-            if clean_name and vessel_name_cache.get(int(mmsi)) != clean_name:
-                vessel_name_cache[int(mmsi)] = clean_name
-                log.info(f"  [type5] MMSI={mmsi} name={clean_name}")
-                # Gem til DB i baggrunden — ikke-blokerende
+        callsign = data.get("callsign")
+        imo = data.get("imo")
+        destination = data.get("destination")
+
+        if mmsi and (shipname or ship_type or callsign or imo or destination):
+            mmsi_int = int(mmsi)
+
+            def _clean(s):
+                return str(s).strip().rstrip("@").strip() if s else None
+
+            snap = {
+                "shipname": _clean(shipname),
+                "ship_type": int(ship_type) if ship_type else None,
+                "callsign": _clean(callsign),
+                "imo": int(imo) if imo else None,
+                "destination": _clean(destination),
+            }
+            if vessel_static_cache.get(mmsi_int) != snap:
+                vessel_static_cache[mmsi_int] = snap
+                # Hold name-cache synkron til position enrichment nedenfor.
+                if snap["shipname"]:
+                    vessel_name_cache[mmsi_int] = snap["shipname"]
+                log.info(
+                    f"  [type5] MMSI={mmsi} name={snap['shipname']!r} "
+                    f"ship_type={snap['ship_type']} callsign={snap['callsign']!r}"
+                )
+                # Gem til DB i baggrunden — ikke-blokerende.
                 threading.Thread(
-                    target=persist_vessel_name,
-                    args=(int(mmsi), clean_name),
+                    target=persist_vessel_static,
+                    kwargs={
+                        "mmsi": mmsi_int,
+                        "ship_type": snap["ship_type"],
+                        "callsign": snap["callsign"],
+                        "imo": snap["imo"],
+                        "destination": snap["destination"],
+                        "shipname": snap["shipname"],
+                    },
                     daemon=True,
                 ).start()
 

@@ -1,24 +1,11 @@
--- Batch-log anomalies from the ingest pipeline. Called by edge functions when
--- a row is rejected for a reason that is itself evidence (teleportation,
--- impossible speed, future timestamps, etc.) — not for protocol errors like
--- malformed MMSI or missing coords.
+-- Fix: write_anomalies_batch v1 used ->>'mmsi_int' for entity lookup, which
+-- only matched 9 of 348 entities (those created since ingest_positions_v2).
+-- The legacy 339 rows store mmsi as a JSON number under ->'mmsi'. Using
+-- ->>'mmsi' text-coerces both representations, then cast to bigint.
 --
--- Takes a jsonb array of rows, each with:
---   mmsi         bigint  required  — looked up against entities.domain_meta.mmsi_int
---   anomaly_type text    required  — e.g. 'teleportation'
---   severity     text    optional  — 'info' | 'warn' | 'error' | 'critical', default 'info'
---   details      jsonb   optional  — free-form evidence (prev/current pos, speed, dt, …)
---   detected_at  text    optional  — iso timestamp, default now()
---
--- p_source_name is looked up once against ingest_sources.name for every row
--- in the batch. Returns the count of rows actually inserted.
---
--- Rows without a matching entity still get logged (entity_id NULL) — useful
--- for MMSI we've never seen accepting a position, which is itself a signal.
---
--- SECURITY DEFINER: edge functions use service_role which already bypasses
--- RLS, but defining it this way keeps the contract clean if we later call
--- it from anon-facing paths.
+-- Impact: pre-fix, teleportation anomalies for vessels with legacy-format
+-- entries landed with entity_id=NULL. Post-fix, FK resolution works for
+-- both formats.
 
 CREATE OR REPLACE FUNCTION public.write_anomalies_batch(
   p_rows jsonb,
@@ -58,9 +45,6 @@ BEGIN
     WHERE elem->>'anomaly_type' IS NOT NULL
   ),
   resolved AS (
-    -- Match both legacy (mmsi as JSON number) and new (mmsi as 9-digit string)
-    -- formats via text coercion. ->>'mmsi_int' alone only matched 9 of 348
-    -- rows; ->>'mmsi' catches both.
     SELECT
       i.anomaly_type,
       i.severity,
@@ -82,5 +66,8 @@ BEGIN
 
   RETURN v_inserted;
 END;
-$function$
-;
+$function$;
+
+REVOKE ALL ON FUNCTION public.write_anomalies_batch(jsonb, text) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.write_anomalies_batch(jsonb, text) FROM anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.write_anomalies_batch(jsonb, text) TO service_role;
