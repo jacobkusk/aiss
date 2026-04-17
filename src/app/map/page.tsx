@@ -57,7 +57,7 @@ function fmtTime(iso: string | null, approx = false) {
   return `${prefix}${date} ${local} (${tzLabel})\n${prefix}${utc} UTC`;
 }
 
-const REPLAY_SPEEDS = [1, 5, 15, 60, 300] as const;
+const REPLAY_SPEEDS: number[] = [1, 5, 15, 60, 300];
 const EMPTY_TRACKS: TrackMap = new Map();
 
 export default function MapPage() {
@@ -486,7 +486,7 @@ export default function MapPage() {
               if (panelMode === "timemachine") {
                 setPanelMode("live");
                 setReplayMode(false);
-                setReplayTracks(emptyTracks);
+                setReplayTracks(EMPTY_TRACKS);
                 setReplayTime(null);
                 setReplayStart(null);
                 setReplayEnd(null);
@@ -531,7 +531,7 @@ export default function MapPage() {
                 setReplayMode(true);
               } else {
                 setReplayMode(false);
-                setReplayTracks(emptyTracks);
+                setReplayTracks(EMPTY_TRACKS);
                 setReplayTime(null);
                 setReplayStart(null);
                 setReplayEnd(null);
