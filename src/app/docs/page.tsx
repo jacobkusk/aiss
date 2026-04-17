@@ -1,3 +1,4 @@
+import Link from "next/link";
 import CopyButton from "@/components/CopyButton";
 
 async function getSigningKey(): Promise<string | null> {
@@ -132,7 +133,7 @@ export default async function DocsPage() {
   const signingKey = await getSigningKey();
 
   return (
-    <div style={{
+    <div className="docs-shell" style={{
       minHeight: "100vh",
       background: "linear-gradient(180deg, #1a1a3e 0%, #0f0f2a 60%, #080818 100%)",
       color: "#ffffff",
@@ -140,8 +141,53 @@ export default async function DocsPage() {
       display: "flex",
     }}>
 
-      {/* Sidebar */}
-      <aside style={{
+      {/* Mobile top bar — visible below 900px only */}
+      <details className="docs-mobile-nav">
+        <summary>
+          <Link href="/" style={{ textDecoration: "none", display: "inline-flex", alignItems: "baseline", gap: "8px" }}>
+            <span style={{ fontSize: "16px", fontWeight: 700, color: "#ffffff", letterSpacing: "-0.5px" }}>AISs</span>
+            <span style={{ fontSize: "10px", color: "rgba(255,255,255,0.35)", letterSpacing: "0.1em" }}>API REFERENCE</span>
+          </Link>
+          <span className="docs-mobile-burger" aria-hidden="true">≡</span>
+        </summary>
+        <nav>
+          {NAV.map((item) => (
+            <div key={item.id}>
+              <a href={`#${item.id}`} className="docs-nav-link" style={{
+                display: "block",
+                fontSize: "14px",
+                fontWeight: 500,
+                color: "rgba(255,255,255,0.7)",
+                textDecoration: "none",
+                padding: "8px 10px",
+                borderRadius: "6px",
+              }}>
+                {item.label}
+              </a>
+              {"children" in item && item.children && (
+                <div style={{ paddingLeft: "12px", display: "flex", flexDirection: "column", gap: "1px" }}>
+                  {item.children.map((child) => (
+                    <a key={child.id} href={`#${child.id}`} className="docs-nav-child" style={{
+                      display: "block",
+                      fontSize: "12px",
+                      fontFamily: "monospace",
+                      color: "rgba(255,255,255,0.4)",
+                      textDecoration: "none",
+                      padding: "5px 10px",
+                      borderRadius: "4px",
+                    }}>
+                      {child.label}
+                    </a>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+        </nav>
+      </details>
+
+      {/* Desktop sidebar — hidden below 900px */}
+      <aside className="docs-sidebar" style={{
         width: "220px",
         flexShrink: 0,
         position: "sticky",
@@ -154,9 +200,9 @@ export default async function DocsPage() {
         flexDirection: "column",
       }}>
         <div style={{ padding: "0 24px", marginBottom: "32px" }}>
-          <a href="/" style={{ textDecoration: "none" }}>
+          <Link href="/" style={{ textDecoration: "none" }}>
             <span style={{ fontSize: "18px", fontWeight: 700, color: "#ffffff", letterSpacing: "-0.5px" }}>AISs</span>
-          </a>
+          </Link>
           <div style={{ fontSize: "11px", color: "rgba(255,255,255,0.3)", marginTop: "2px", letterSpacing: "0.08em" }}>API REFERENCE</div>
         </div>
 
@@ -194,14 +240,56 @@ export default async function DocsPage() {
             </div>
           ))}
         </nav>
-        <style>{`
-          .docs-nav-link:hover { color: #ffffff !important; }
-          .docs-nav-child:hover { color: #6b8aff !important; }
-        `}</style>
       </aside>
 
+      <style>{`
+        .docs-nav-link:hover { color: #ffffff !important; }
+        .docs-nav-child:hover { color: #6b8aff !important; }
+        .docs-mobile-nav { display: none; }
+        .docs-mobile-nav summary::-webkit-details-marker { display: none; }
+        .docs-mobile-nav summary { list-style: none; }
+
+        @media (max-width: 900px) {
+          .docs-shell { flex-direction: column !important; }
+          .docs-sidebar { display: none !important; }
+          .docs-main { max-width: 100% !important; padding: 24px 20px 80px !important; }
+          .docs-mobile-nav {
+            display: block;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            background: rgba(15, 15, 42, 0.92);
+            -webkit-backdrop-filter: blur(8px);
+            backdrop-filter: blur(8px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+          }
+          .docs-mobile-nav summary {
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 14px 20px;
+          }
+          .docs-mobile-burger {
+            font-size: 22px;
+            color: rgba(255, 255, 255, 0.5);
+            line-height: 1;
+          }
+          .docs-mobile-nav[open] .docs-mobile-burger { color: #6b8aff; }
+          .docs-mobile-nav[open] nav {
+            padding: 4px 16px 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            max-height: 60vh;
+            overflow-y: auto;
+            border-top: 1px solid rgba(255, 255, 255, 0.04);
+          }
+        }
+      `}</style>
+
       {/* Content */}
-      <main style={{ flex: 1, maxWidth: "820px", padding: "64px 48px 120px", overflowX: "hidden" }}>
+      <main className="docs-main" style={{ flex: 1, maxWidth: "820px", padding: "64px 48px 120px", overflowX: "hidden" }}>
 
         {/* Intro */}
         <div id="intro">
@@ -510,7 +598,7 @@ curl -X POST "https://aiss.network/v1/ingest" \\
             A <code style={{ fontFamily: "monospace", color: "#6b8aff" }}>.aiss</code> file is a signed JSON document representing one voyage by one vessel.
           </p>
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", marginBottom: "28px" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: "16px", marginBottom: "28px" }}>
             <div style={{ background: "rgba(43,168,200,0.06)", border: "1px solid rgba(43,168,200,0.15)", borderRadius: "8px", padding: "16px 20px" }}>
               <div style={{ fontSize: "11px", fontWeight: 700, letterSpacing: "0.1em", color: "#2ba8c8", textTransform: "uppercase", marginBottom: "10px" }}>Contains</div>
               <ul style={{ margin: 0, padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: "6px" }}>

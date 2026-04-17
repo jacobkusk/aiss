@@ -88,8 +88,10 @@ export default function HealthPage() {
   const [stats, setStats]     = useState<SystemStats | null>(null);
   const [loading, setLoading]   = useState(true);
   const [apiError, setApiError] = useState<string | null>(null);
-  const [tick, setTick]       = useState(0);
   const [retryKey, setRetryKey] = useState(0);
+  // Snapshot "now" each time stats arrive so render stays pure — relative
+  // times update every 20s alongside the fetch, matching data granularity.
+  const [now, setNow] = useState<number>(() => Date.now());
 
   useEffect(() => {
     let mounted = true;
@@ -103,6 +105,7 @@ export default function HealthPage() {
           setLoading(false);
           return;
         }
+        setNow(Date.now());
         setStats(json);
         setApiError(null);
         setLoading(false);
@@ -117,11 +120,6 @@ export default function HealthPage() {
     const id = setInterval(load, 20_000);
     return () => { mounted = false; clearInterval(id); };
   }, [retryKey]);
-
-  useEffect(() => {
-    const id = setInterval(() => setTick((t) => t + 1), 1000);
-    return () => clearInterval(id);
-  }, []);
 
   const maxDay     = Math.max(...(stats?.daily_positions ?? []).map((d) => d.n), 1);
   const growth     = stats?.vessels_growth ?? [];
@@ -370,7 +368,7 @@ export default function HealthPage() {
                   </div>
                 </div>
                 <div style={{ fontSize: 10, color: "#3a5060", flexShrink: 0 }}>
-                  {r.checked_at ? ago(Math.round((Date.now() - new Date(r.checked_at).getTime()) / 1000)) : "—"}
+                  {r.checked_at ? ago(Math.round((now - new Date(r.checked_at).getTime()) / 1000)) : "—"}
                 </div>
               </div>
             ))}
