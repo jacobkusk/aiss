@@ -22,14 +22,15 @@ Landing page + live map + API docs for aiss.network — the open maritime eviden
 
 | Table | Purpose |
 |---|---|
-| `entities` | One row per vessel / drone / sensor. `entity_id` uuid, `entity_type` text, `display_name`, `domain_meta` jsonb (holds MMSI, ship_type, callsign, etc.) |
+| `entities` | One row per vessel / drone / sensor. `entity_id` uuid, `entity_type` text, `display_name`, `domain_meta` jsonb (holds MMSI, ship_type, callsign, etc.), vault: `visibility` (public/private), `owner_id` uuid, `retention` (standard/permanent) |
 | `entity_last` | Latest position per entity — the live dot. `lat`, `lon`, `speed`, `bearing`, `t`, `source`, `source_count`, `sensors` jsonb |
 | `positions_v2` | Raw positions, partitioned **daily** (`positions_v2_YYYYMMDD`). RLS on. Policy must be added per partition |
 | `positions_v2_historical` | Rolled-up older positions |
 | `tracks` | Compressed Douglas-Peucker track per entity, signed: `merkle_root`, `segment_hashes[]`, `gap_intervals`, `epsilon_m`, `encrypted_dek`, `permanent_address` |
 | `strings` | Per-entity-per-date `MultiLineStringM` — the persistent track line shown on the map |
-| `evidence` | Append-only hash chain: `hash`, `prev_hash`, `pts` jsonb. Tamper-proof bevisførelse |
-| `ingest_sources` | Registered collectors (pi4_rtlsdr, aisstream, aishub …). `is_active` flag, `config` jsonb |
+| `evidence` | Append-only hash chain: `hash`, `prev_hash`, `pts` jsonb, `validation_meta` jsonb. Tamper-proof bevisførelse |
+| `anomalies` | Append-only log of detected inconsistencies (spoof, null-island, source conflict, teleportation). `anomaly_type`, `severity`, `details` jsonb, `evidence_ref` |
+| `ingest_sources` | Registered collectors (pi4_rtlsdr, aisstream, aishub …). `is_active` flag, `config` jsonb, `public_delay_hours` |
 | `ingest_stats` | Per-flush: `accepted`, `rejected`, `batch_ms` — the PI heartbeat |
 | `heal_log` | Self-healing actions taken by scheduled checks |
 | `rpc_health` | Per-RPC latency/ok history, populated by `run_rpc_health_checks` |
@@ -101,13 +102,19 @@ JetBrains Mono loades via `next/font/google` — ingen lokale font-filer i `publ
 - Mobile: sidebar collapses to bottom sheet
 - Performance: use MapLibre clustering at low zoom
 
-## The 3-layer map model
+## The map model
 
-All rules live in `src/lib/trackRules.ts`. Read that file before touching map visuals.
+All track-rendering rules live in `src/lib/trackRules.ts` — **read that file before touching map visuals**. No rules elsewhere. The header at the top explains what we draw and why, in plain English.
 
-1. **WP** — raw CRC-verified AIS fixes. Drawn today. See `trackRules.ts`.
-2. **LINE** — interpreted track with vessel-type rules. **Not yet implemented** — blocked on populating `entities.domain_meta.ship_type` (currently null for ~99 % of vessels).
-3. **D·P** — compressed LINE (future). Each compressed track stores `merkle_root` + `algorithm_version` so a re-compression becomes a new signed version alongside the old one, not a replacement.
+Two display modes (toggle in the sidebar):
+
+1. **LINE mode** — connects consecutive waypoints with prediction-coloured line + gap dashes + direction chevrons + FROM/TO markers.
+2. **WP mode** — strictly LINE mode + a dot, ring, sequence number and COG triangle on each waypoint. Nothing WP-exclusive except those extras.
+
+Future layers (not implemented yet):
+
+- **Enhanced LINE** — vessel-type-aware line that splits/merges based on harbour geofences and ship_type rules. Blocked on populating `entities.domain_meta.ship_type` (null for ~99 % of vessels today).
+- **D·P** — compressed LINE with fewer points. Each compressed track stores `merkle_root` + `algorithm_version` so a re-compression becomes a new signed version alongside the old one, not a replacement.
 
 ## Brand
 

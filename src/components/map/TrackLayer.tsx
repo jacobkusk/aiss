@@ -1,21 +1,27 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMap } from "./MapContext";
 import { supabase } from "@/lib/supabase";
-import { GAP, LINE_STYLE } from "@/lib/trackRules";
+import { GAP, LINE_STYLE, DIRECTION } from "@/lib/trackRules";
 
 const SOURCE        = "track";
 const FOCUS_SOURCE  = "track-focus";
 const ENDPOINT_SOURCE = "track-endpoints";
 
-// Douglas-Peucker overlay — single source with feature types
-const DOUGLAS_SOURCE   = "track-dp";
-const DOUGLAS_LINE_LYR = "track-dp-line";
-const DOUGLAS_DOT_LYR  = "track-dp-dots";
-const DOUGLAS_HIT_LYR  = "track-dp-hit";
+// Douglas-Peucker overlay — single source with feature types.
+// Mirrors LINE layer's 4-segment model (solid / short gap / long gap / blank).
+// Gap classification is computed client-side from consecutive D·P point time
+// deltas, using the same GAP thresholds as LINE. See trackRules.ts header.
+const DOUGLAS_SOURCE        = "track-dp";
+const DOUGLAS_LINE_LYR      = "track-dp-line";
+const DOUGLAS_GAP_LYR       = "track-dp-gap";       // short gap  (5–10 min)
+const DOUGLAS_GAP_LONG_LYR  = "track-dp-gap-long";  // long  gap (10–20 min)
+const DOUGLAS_DOT_LYR       = "track-dp-dots";
+const DOUGLAS_HIT_LYR       = "track-dp-hit";
 
 const LAYER_LINE    = "track-line";
+const LAYER_DIR     = "track-direction";
 const LAYER_DOTS    = "track-dots";
 const LAYER_RING    = "track-rings";
 const LAYER_SOG     = "track-sog";
@@ -48,6 +54,10 @@ interface Props {
   timeRange?: [number, number] | null;
   onTimeBounds?: (bounds: [number, number]) => void;
   onWaypointTimes?: (times: number[]) => void;
+  /** Emitted in parallel with onWaypointTimes — speed (SOG, knots) for each waypoint, null if unknown */
+  onWaypointSpeeds?: (speeds: (number | null)[]) => void;
+  /** Emitted in parallel with onWaypointTimes — prediction_color hex per waypoint (matches line) */
+  onWaypointColors?: (colors: (string | null)[]) => void;
   focusedTime?: number | null;
   replayMode?: boolean;
   livePosition?: LivePosition | null;
@@ -81,21 +91,16 @@ interface Props {
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
 /**
- * Map a normalized fraction [0,1] of the visible track range to an HSL color.
- * fraction 0 = start of visible range, 1 = end. Hue spans 0–300° (red → magenta)
- * so we don't loop back to the same color. Constant saturation/lightness for
- * good contrast on the dark map background.
- *
- * Used in line mode to disentangle overlapping segments visited at different
- * times within the *currently shown* track window — not absolute time of day.
+ * Flat-earth approximation of segment length in metres.
+ * Accurate to ~0.1% for distances < 10 km at typical AIS waypoint spacing.
+ * Used to accumulate cumulative track distance for chevron placement
+ * (see DIRECTION.SPACING_M in trackRules.ts).
  */
-function trackRangeColor(fraction: number): string {
-  const f = Math.max(0, Math.min(1, fraction));
-  // Start green (120°), end purple (280°), going the LONG way around the
-  // hue circle: green → yellow → orange → red → magenta → purple. 200° span,
-  // covering most of the visible spectrum.
-  const hue = ((120 - f * 200) % 360 + 360) % 360;
-  return `hsl(${hue.toFixed(1)}, 72%, 60%)`;
+function segmentLengthM(a: number[], b: number[]): number {
+  const latRad = ((a[1] + b[1]) / 2) * Math.PI / 180;
+  const dxM = (b[0] - a[0]) * 111320 * Math.cos(latRad);
+  const dyM = (b[1] - a[1]) * 111320;
+  return Math.hypot(dxM, dyM);
 }
 
 function filterPoints(points: GeoJSON.Feature[], timeRange: [number, number] | null | undefined): GeoJSON.Feature[] {
@@ -117,35 +122,11 @@ function buildGeoJSON(
 
   const features: GeoJSON.Feature[] = [...filtered];
 
-  // ── Distance-weighted gradient ────────────────────────────────────────────
-  // Pre-pass: measure each solid segment's geographic length so the colour
-  // fraction is proportional to distance, not point count. Long stretches of
-  // open water get more colour range than tight harbour manoeuvres.
-  const approxDeg = (a: number[], b: number[]) => {
-    const dx = (b[0] - a[0]) * Math.cos(a[1] * Math.PI / 180);
-    const dy = b[1] - a[1];
-    return Math.sqrt(dx * dx + dy * dy);
-  };
-
-  let totalSolidDist = 0;
-  const segCount   = Math.max(0, filtered.length - 1);
-  const segDist    = new Array<number>(segCount).fill(0);
-  const segCumDist = new Array<number>(segCount).fill(0);
-  for (let i = 0; i < filtered.length - 1; i++) {
-    const fpAi = (filtered[i].properties as any);
-    const fpBi = (filtered[i + 1].properties as any);
-    const tAi  = new Date(fpAi?.recorded_at).getTime() / 1000;
-    const tBi  = new Date(fpBi?.recorded_at).getTime() / 1000;
-    const frm  = (filtered[i].geometry as GeoJSON.Point).coordinates;
-    const too  = (filtered[i + 1].geometry as GeoJSON.Point).coordinates;
-    segCumDist[i] = totalSolidDist;
-    if ((tBi - tAi) <= GAP.lowerThresholdSec(fpAi?.speed ?? null)) {
-      segDist[i] = approxDeg(frm, too);
-      totalSolidDist += segDist[i];
-    }
-  }
-  if (totalSolidDist === 0) totalSolidDist = 1;
-
+  // Chevron placement — see DIRECTION in trackRules.ts.
+  // Accumulator resets on track breaks (> LONG gap); starts at SPACING_M so
+  // the first eligible segment fires a chevron.
+  let cumDistM = DIRECTION.SPACING_M;
+  let prevColor: string | null = null;
 
   for (let i = 0; i < filtered.length - 1; i++) {
     const from  = (filtered[i].geometry as GeoJSON.Point).coordinates;
@@ -157,16 +138,22 @@ function buildGeoJSON(
     const dtSec = tB - tA;
     const sogKn: number | null = fpA?.speed ?? null;
     const lowerSec = GAP.lowerThresholdSec(sogKn);
-    const isShortGap = dtSec > lowerSec && dtSec <= GAP.SHORT_UPPER_SEC; // 5-10 min
-    const isLongGap  = dtSec > GAP.SHORT_UPPER_SEC && dtSec <= GAP.LONG_SEC; // 10-20 min
-    const isTooLong  = dtSec > GAP.LONG_SEC; // > 20 min
-    const color = fpB?.prediction_color ?? "#2ba8c8";
+    const isShortGap = dtSec > lowerSec && dtSec <= GAP.SHORT_UPPER_SEC;
+    const isLongGap  = dtSec > GAP.SHORT_UPPER_SEC && dtSec <= GAP.LONG_SEC;
+    const isTooLong  = dtSec > GAP.LONG_SEC;
+    // Fallback to green — see PREDICTION auto-green cases in trackRules.ts.
+    const color = fpB?.prediction_color ?? "#00e676";
 
     if (isTooLong) {
-      // > 20 min = vessel disappeared. Draw nothing — new track if vessel returns
+      // > 20 min = new track. Reset accumulator + colour so the next segment
+      // starts fresh with a chevron.
+      cumDistM = DIRECTION.SPACING_M;
+      prevColor = null;
       continue;
     }
     if (isShortGap || isLongGap) {
+      // No chevron on gap dashes — but don't reset the accumulator: the
+      // visual rhythm continues across short silences.
       features.push({
         type: "Feature",
         geometry: { type: "LineString", coordinates: [from, to] },
@@ -180,16 +167,22 @@ function buildGeoJSON(
       });
     } else {
       // One feature per waypoint-to-waypoint segment — no subdivision.
-      // Subdivision caused tile-boundary fragmentation at low zoom.
-      // Colour is based on the segment's cumulative distance position.
-      const frac = segCumDist[i] / totalSolidDist;
+      // (Subdivision caused tile-boundary fragmentation at low zoom.)
+      const segLen = segmentLengthM(from, to);
+      cumDistM += segLen;
+      const colorChanged = DIRECTION.FIRE_ON_COLOR_CHANGE
+        && prevColor != null
+        && color !== prevColor;
+      const showChevron = (cumDistM >= DIRECTION.SPACING_M || colorChanged) ? 1 : 0;
+      if (showChevron) cumDistM = 0;
+      prevColor = color;
       features.push({
         type: "Feature",
         geometry: { type: "LineString", coordinates: [from, to] },
         properties: {
           type: "line",
           prediction_color: color,
-          time_color: trackRangeColor(frac),
+          chevron:  showChevron,
           from_t: fpA?.recorded_at ?? null,
           to_t:   fpB?.recorded_at ?? null,
           mmsi:   fpA?.mmsi ?? null,
@@ -218,7 +211,8 @@ function buildGeoJSON(
             ? { type: "gap-long", prediction_color: GAP.LONG_COLOR }
             : isShortGap
             ? { type: "gap",      prediction_color: GAP.SHORT_COLOR }
-            : { type: "line",     prediction_color: "#00e676" },
+            : { type: "line",     prediction_color: "#00e676",
+                chevron:  1 }, // live connector → always show direction arrow
         });
       }
       const liveProps: Record<string, unknown> = {
@@ -249,13 +243,7 @@ function buildEndpointGeoJSON(
   const filtered = filterPoints(points, timeRange);
   if (filtered.length === 0) return { type: "FeatureCollection", features: [] };
 
-  // ENDPOINTS rule (see lib/trackRules.ts → ENDPOINTS):
-  //   FROM = filtered[0]          — first waypoint in visible range
-  //   TO   = filtered[length - 1] — last  waypoint in visible range
-  // Every waypoint is a CRC-verified AIS fix; a gap before the last fix is a
-  // reporting-rate gap, not a data-quality issue. The dashed line communicates
-  // the gap — the TO marker stays on the actual last known position.
-
+  // FROM / TO rule — see ENDPOINTS in trackRules.ts.
   const features: GeoJSON.Feature[] = [];
 
   const first = filtered[0];
@@ -290,7 +278,7 @@ function buildEndpointGeoJSON(
 
 export default function TrackLayer({
   selectedMmsi, onClear, onHover, onWaypointClick,
-  timeRange, onTimeBounds, onWaypointTimes, focusedTime,
+  timeRange, onTimeBounds, onWaypointTimes, onWaypointSpeeds, onWaypointColors, focusedTime,
   replayMode, livePosition, voyageMode = false, windowStartMs,
   voyageRange, onVoyageLoaded, douglasMode = false,
   showLine = true, showDots = false,
@@ -298,6 +286,12 @@ export default function TrackLayer({
   const map = useMap();
   const initializedRef    = useRef(false);
   const allPointsRef      = useRef<GeoJSON.Feature[]>([]);
+  // Bumped when a fresh fetchTrack finishes. Triggers the single render effect
+  // below together with timeRange — ensures the track is only painted when both
+  // data AND time-filter are in sync (prevents the "long green/yellow flash"
+  // where 7 days of points were briefly painted with a stale or null filter
+  // before the parent's onTimeBounds callback narrowed timeRange).
+  const [dataVersion, setDataVersion] = useState(0);
 
   // Stable refs so event handlers always see latest values
   const onWpClickRef    = useRef(onWaypointClick);
@@ -333,15 +327,28 @@ export default function TrackLayer({
         layout: { visibility: "none" },
       });
     }
-    // Gap segmenter — grå stiplet
-    if (!map.getLayer("track-dp-gap")) {
-      map.addLayer({ id: "track-dp-gap", type: "line", source: DOUGLAS_SOURCE,
+    // Short gap (5–10 min silent) — dense dashed, matches LAYER_GAP on LINE
+    if (!map.getLayer(DOUGLAS_GAP_LYR)) {
+      map.addLayer({ id: DOUGLAS_GAP_LYR, type: "line", source: DOUGLAS_SOURCE,
         filter: ["==", ["get", "t"], "gap"],
         paint: {
-          "line-color": "#5a8090",
-          "line-width": 1.5,
-          "line-opacity": 0.5,
-          "line-dasharray": [3, 4],
+          "line-color":     GAP.SHORT_COLOR,
+          "line-width":     LINE_STYLE.gap.width,
+          "line-opacity":   LINE_STYLE.gap.opacity,
+          "line-dasharray": LINE_STYLE.gap.dash!,
+        },
+        layout: { visibility: "none" },
+      });
+    }
+    // Long gap (10–20 min silent) — sparse dashed, matches LAYER_GAP_LONG on LINE
+    if (!map.getLayer(DOUGLAS_GAP_LONG_LYR)) {
+      map.addLayer({ id: DOUGLAS_GAP_LONG_LYR, type: "line", source: DOUGLAS_SOURCE,
+        filter: ["==", ["get", "t"], "gap-long"],
+        paint: {
+          "line-color":     GAP.LONG_COLOR,
+          "line-width":     LINE_STYLE.gap_long.width,
+          "line-opacity":   LINE_STYLE.gap_long.opacity,
+          "line-dasharray": LINE_STYLE.gap_long.dash!,
         },
         layout: { visibility: "none" },
       });
@@ -377,9 +384,62 @@ export default function TrackLayer({
       id: LAYER_LINE, type: "line", source: SOURCE,
       filter: ["==", ["get", "type"], "line"],
       paint: {
-        "line-color":   ["coalesce", ["get", "prediction_color"], "#2ba8c8"],
+        "line-color":   ["coalesce", ["get", "prediction_color"], "#00e676"],
         "line-width":   LINE_STYLE.normal.width,
         "line-opacity": LINE_STYLE.normal.opacity,
+      },
+    });
+
+    // ── direction chevrons — forward-pointing arrows along the line ──────────
+    // Placement rules: see DIRECTION in trackRules.ts. buildGeoJSON marks
+    // eligible segments with `chevron: 1`; we filter on that here.
+    // Added BEFORE gap layers so gap-dashes render on top on any overlap.
+    if (!map.hasImage("track-chevron")) {
+      const size = DIRECTION.ICON_SIZE_PX;
+      const canvas = document.createElement("canvas");
+      canvas.width = size;
+      canvas.height = size;
+      const ctx = canvas.getContext("2d")!;
+      ctx.strokeStyle = "#FFFFFF"; // SDF: tinted via icon-color at layer level
+      ctx.lineWidth = size * DIRECTION.STROKE_FRACTION;
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+      ctx.beginPath();
+      ctx.moveTo(size * 0.32, size * 0.24);
+      ctx.lineTo(size * 0.72, size * 0.50);
+      ctx.lineTo(size * 0.32, size * 0.76);
+      ctx.stroke();
+      try {
+        const imgData = ctx.getImageData(0, 0, size, size);
+        map.addImage(
+          "track-chevron",
+          { width: size, height: size, data: imgData.data },
+          { pixelRatio: 2, sdf: true },
+        );
+      } catch (e) {
+        console.error("track-chevron sprite load failed:", e);
+      }
+    }
+    map.addLayer({
+      id: LAYER_DIR, type: "symbol", source: SOURCE,
+      filter: ["all",
+        ["==", ["get", "type"], "line"],
+        ["==", ["number", ["get", "chevron"], 0], 1],
+      ],
+      layout: {
+        "symbol-placement": "line-center",
+        "icon-image": "track-chevron",
+        "icon-size": [
+          "interpolate", ["linear"], ["zoom"],
+          ...DIRECTION.ICON_SIZE_BY_ZOOM.flatMap(([z, s]) => [z, s]),
+        ],
+        "icon-rotate": 0,
+        "icon-allow-overlap": true,
+        "icon-ignore-placement": true,
+      },
+      paint: {
+        "icon-color": ["coalesce", ["get", "prediction_color"], "#00e676"],
+        "icon-opacity": 0.88,
       },
     });
 
@@ -457,7 +517,9 @@ export default function TrackLayer({
       paint: { "text-color": ["coalesce", ["get", "prediction_color"], "#00e676"] },
     });
 
-    // COG sprite — ring med markering på toppen (roteres efter course)
+    // COG sprite — SDF triangle på toppen af canvas, roteres efter course.
+    // SDF = GPU-renderede vektor-skarpe kanter ved alle zoom-niveauer, samme
+    // kvalitet som MapLibre's native circle-lag. Tintes via icon-color.
     if (!map.hasImage("cog-arrow")) {
       const size = 80;
       const canvas = document.createElement("canvas");
@@ -465,26 +527,20 @@ export default function TrackLayer({
       canvas.height = size;
       const ctx = canvas.getContext("2d")!;
       const cx = size / 2, cy = size / 2;
-      const r = 28; // ring radius
-      // Hvid trekant der peger udad fra centrum
-      ctx.fillStyle = "#ffffff";
+      const r = 28;
+      ctx.fillStyle = "#FFFFFF"; // SDF → tintes via icon-color på layer
       ctx.beginPath();
-      ctx.moveTo(cx, cy - r - 8);   // top-spids
-      ctx.lineTo(cx - 6, cy - r + 2);
-      ctx.lineTo(cx + 6, cy - r + 2);
+      ctx.moveTo(cx, cy - r - 10);   // top-spids (+1px display-px)
+      ctx.lineTo(cx - 8, cy - r + 2);
+      ctx.lineTo(cx + 8, cy - r + 2);
       ctx.closePath();
       ctx.fill();
-
-      const url = canvas.toDataURL();
-      const img = new Image();
-      img.onload = () => {
-        if (!map.hasImage("cog-arrow")) {
-          try { map.addImage("cog-arrow", img, { pixelRatio: 2 }); }
-          catch (e) { console.error("COG sprite load failed:", e); }
-        }
-      };
-      img.onerror = (e) => console.error("COG sprite image error:", e);
-      img.src = url;
+      try {
+        const imgData = ctx.getImageData(0, 0, size, size);
+        map.addImage("cog-arrow",
+          { width: size, height: size, data: imgData.data },
+          { pixelRatio: 2, sdf: true });
+      } catch (e) { console.error("COG sprite load failed:", e); }
     }
     map.addLayer({
       id: LAYER_COG, type: "symbol", source: SOURCE,
@@ -502,7 +558,10 @@ export default function TrackLayer({
           19, 1.0,
         ],
       },
-      paint: { "icon-opacity": 1 },
+      paint: {
+        "icon-color": "#ffffff",
+        "icon-opacity": 1,
+      },
     });
 
     // ── endpoint markers (FROM / TO) ──────────────────────────────────────────
@@ -727,8 +786,8 @@ export default function TrackLayer({
         map.off("mouseleave", DOUGLAS_HIT_LYR, handleDPLeave);
 
         [LAYER_ENDPOINT_LABELS, LAYER_ENDPOINT_DOTS, LAYER_FOCUS, LAYER_COG, LAYER_SOG,
-         LAYER_RING, LAYER_DOTS, LAYER_LINE_HIT, LAYER_GAP_LONG, LAYER_GAP, LAYER_LINE,
-         DOUGLAS_LINE_LYR, DOUGLAS_DOT_LYR, "track-dp-labels", DOUGLAS_HIT_LYR].forEach((id) => {
+         LAYER_RING, LAYER_DOTS, LAYER_DIR, LAYER_LINE_HIT, LAYER_GAP_LONG, LAYER_GAP, LAYER_LINE,
+         DOUGLAS_LINE_LYR, DOUGLAS_GAP_LYR, DOUGLAS_GAP_LONG_LYR, DOUGLAS_DOT_LYR, "track-dp-labels", DOUGLAS_HIT_LYR].forEach((id) => {
           if (map.getLayer(id)) map.removeLayer(id);
         });
         [ENDPOINT_SOURCE, FOCUS_SOURCE, SOURCE, DOUGLAS_SOURCE].forEach((id) => {
@@ -757,17 +816,18 @@ export default function TrackLayer({
           ["interpolate", ["linear"], ["zoom"], 13, 0, 15, 0.55]);
       }
     }
-    [LAYER_LINE, LAYER_GAP, LAYER_GAP_LONG, LAYER_LINE_HIT].forEach(id => {
+    [LAYER_LINE, LAYER_GAP, LAYER_GAP_LONG, LAYER_LINE_HIT, LAYER_DIR].forEach(id => {
       if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", lineVis);
     });
     [LAYER_ENDPOINT_DOTS, LAYER_ENDPOINT_LABELS].forEach(id => {
       if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", lineVis);
     });
     if (map.getLayer(LAYER_LINE)) {
+      // Prediction colour in both line-only and WP modes (see trackRules.ts).
+      // voyageMode overrides to flat amber — deliberate historic macro view.
       map.setPaintProperty(LAYER_LINE, "line-color",
         voyageMode ? "#f59e0b"
-        : showDots ? ["coalesce", ["get", "prediction_color"], "#2ba8c8"]
-        :            ["coalesce", ["get", "time_color"],       "#2ba8c8"]);
+                   : ["coalesce", ["get", "prediction_color"], "#00e676"]);
       map.setPaintProperty(LAYER_LINE, "line-width",   voyageMode ? 3.0  : LINE_STYLE.normal.width);
       map.setPaintProperty(LAYER_LINE, "line-opacity", voyageMode ? 0.95 : 0.78);
     }
@@ -779,21 +839,32 @@ export default function TrackLayer({
       map.setPaintProperty(LAYER_GAP_LONG, "line-color",   ["coalesce", ["get", "prediction_color"], GAP.LONG_COLOR]);
       map.setPaintProperty(LAYER_GAP_LONG, "line-opacity", voyageMode ? 0.25 : LINE_STYLE.gap_long.opacity);
     }
-    ["track-dp-line", "track-dp-gap", "track-dp-dots", "track-dp-labels", "track-dp-hit"].forEach(id => {
+    if (map.getLayer(LAYER_DIR)) {
+      // Chevron colour follows the line (voyage = flat amber, else prediction).
+      map.setPaintProperty(LAYER_DIR, "icon-color",
+        voyageMode ? "#f59e0b"
+                   : ["coalesce", ["get", "prediction_color"], "#00e676"]);
+    }
+    [DOUGLAS_LINE_LYR, DOUGLAS_GAP_LYR, DOUGLAS_GAP_LONG_LYR, DOUGLAS_DOT_LYR, "track-dp-labels", DOUGLAS_HIT_LYR].forEach(id => {
       if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", "none");
     });
   }, [map, voyageMode, showLine, showDots]);
 
   // ── fetch track when vessel or voyageRange changes ───────────────────────────
   useEffect(() => {
-    if (!map || !selectedMmsi) {
-      allPointsRef.current = [];
-      if (map) {
-        (map.getSource(SOURCE)          as maplibregl.GeoJSONSource)?.setData({ type: "FeatureCollection", features: [] });
-        (map.getSource(ENDPOINT_SOURCE) as maplibregl.GeoJSONSource)?.setData({ type: "FeatureCollection", features: [] });
-      }
-      return;
-    }
+    if (!map) return;
+
+    // Clear the source IMMEDIATELY on selection change — before the async fetch
+    // starts. Otherwise the previous vessel's track stays painted for the ~200-
+    // 500 ms of the RPC roundtrip, which is the "flash of a longer route" bug.
+    // Also resets dataVersion so the single render effect below drops to empty
+    // until fresh points + a fresh timeRange are both in hand.
+    allPointsRef.current = [];
+    (map.getSource(SOURCE)          as maplibregl.GeoJSONSource)?.setData({ type: "FeatureCollection", features: [] });
+    (map.getSource(ENDPOINT_SOURCE) as maplibregl.GeoJSONSource)?.setData({ type: "FeatureCollection", features: [] });
+    setDataVersion(v => v + 1);
+
+    if (!selectedMmsi) return;
 
     let cancelled = false;
     let pollId: ReturnType<typeof setInterval> | null = null;
@@ -841,18 +912,32 @@ export default function TrackLayer({
         const tLast  = new Date((points[points.length - 1].properties as any)?.recorded_at).getTime();
         if (!isNaN(tFirst) && !isNaN(tLast)) {
           if (onTimeBounds) onTimeBounds([tFirst, tLast]);
-          if (onWaypointTimes) {
-            const times = points.map(f => new Date((f.properties as any)?.recorded_at ?? 0).getTime()).filter(t => !isNaN(t));
-            onWaypointTimes(times);
+          if (onWaypointTimes || onWaypointSpeeds || onWaypointColors) {
+            const times: number[] = [];
+            const speeds: (number | null)[] = [];
+            const colors: (string | null)[] = [];
+            for (const f of points) {
+              const t = new Date((f.properties as any)?.recorded_at ?? 0).getTime();
+              if (isNaN(t)) continue;
+              const s = (f.properties as any)?.speed;
+              const c = (f.properties as any)?.prediction_color;
+              times.push(t);
+              speeds.push(s == null ? null : Number(s));
+              colors.push(typeof c === "string" && c ? c : null);
+            }
+            if (onWaypointTimes)  onWaypointTimes(times);
+            if (onWaypointSpeeds) onWaypointSpeeds(speeds);
+            if (onWaypointColors) onWaypointColors(colors);
           }
         }
       }
 
       if (voyageRange && onVoyageLoaded) onVoyageLoaded(points.length);
 
-      const tr = timeRangeRef.current;
-      (map.getSource(SOURCE)          as maplibregl.GeoJSONSource)?.setData(buildGeoJSON(points, tr, livePositionRef.current, map.getZoom()));
-      (map.getSource(ENDPOINT_SOURCE) as maplibregl.GeoJSONSource)?.setData(buildEndpointGeoJSON(points, tr));
+      // Don't setData here. The single render effect below owns painting —
+      // it fires when BOTH dataVersion (bumped below) and timeRange (set by
+      // parent's handleTimeBounds response to onTimeBounds above) are ready.
+      setDataVersion(v => v + 1);
     }
 
     fetchTrack();
@@ -865,21 +950,28 @@ export default function TrackLayer({
   }, [map, selectedMmsi, voyageRange]);
 
   // ── Douglas D·P overlay ──────────────────────────────────────────────────
+  // Mirrors the LINE layer's 4-segment model:
+  //   solid   — dt < GAP.lowerThresholdSec (default 5 min)
+  //   gap     — dt ∈ [5 min, 10 min]         → dense dashed (GAP.SHORT_COLOR)
+  //   gap-long— dt ∈ [10 min, 20 min]        → sparse dashed (GAP.LONG_COLOR)
+  //   blank   — dt > 20 min                   → no line drawn (visual break)
+  //
+  // Inter-segment gaps are always "blank" because build_segment_track splits
+  // on gap_sec = 1800 s, i.e. ≥ 30 min — always beyond GAP.LONG_SEC.
   useEffect(() => {
     if (!map) return;
 
-    const LYRS = [DOUGLAS_LINE_LYR, "track-dp-gap", DOUGLAS_DOT_LYR, "track-dp-labels", DOUGLAS_HIT_LYR];
+    const LYRS = [DOUGLAS_LINE_LYR, DOUGLAS_GAP_LYR, DOUGLAS_GAP_LONG_LYR, DOUGLAS_DOT_LYR, "track-dp-labels", DOUGLAS_HIT_LYR];
     const vis = douglasMode ? "visible" : "none";
     LYRS.forEach(id => { if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", vis); });
 
     if (!douglasMode || !selectedMmsi) return;
 
-    // Fetch D·P track for current time window
     const tr = timeRangeRef.current;
     const params: Record<string, unknown> = { p_mmsi: selectedMmsi };
     if (tr) { params.p_start = tr[0] / 1000; params.p_end = tr[1] / 1000; }
 
-    supabase.rpc("get_track_geojson", params).then((res: any) => {
+    supabase.rpc("get_track_geojson_segments", params).then((res: any) => {
       if (!res?.data) return;
       let raw = res.data;
       if (typeof raw === "string") try { raw = JSON.parse(raw); } catch { return; }
@@ -887,45 +979,73 @@ export default function TrackLayer({
       if (typeof raw === "string") try { raw = JSON.parse(raw); } catch { return; }
       raw = raw ?? {};
 
-      const coords: [number, number, number, number][] = raw.coords ?? [];
-      if (coords.length < 2) return;
+      const segments: Array<{ coords: [number, number, number, number][]; t_start: number; t_end: number }> =
+        (raw.segments ?? []).map((s: any) => ({
+          coords: s.coords as [number, number, number, number][],
+          t_start: Number(s.t_start),
+          t_end:   Number(s.t_end),
+        })).filter((s: any) => Array.isArray(s.coords) && s.coords.length >= 2);
+
+      if (segments.length === 0) {
+        (map.getSource(DOUGLAS_SOURCE) as maplibregl.GeoJSONSource)?.setData({ type: "FeatureCollection", features: [] });
+        return;
+      }
 
       const fmtT = (t: number) => new Date(t * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
-
-      // Gap-detection: brug gap_intervals fra RPC til at splitte i solid/gap segmenter
-      const gaps: [number, number][] = raw.gaps ?? [];
-      const isGap = (t1: number, t2: number) =>
-        gaps.some(([gs, ge]) => gs < t2 && ge > t1);
-
       const features: GeoJSON.Feature[] = [];
-      let solidRun: [number, number][] = [[coords[0][0], coords[0][1]]];
 
-      for (let i = 0; i < coords.length - 1; i++) {
-        const [lon1, lat1, , tStart] = coords[i];
-        const [lon2, lat2, , tEnd]   = coords[i + 1];
-        if (isGap(tStart, tEnd)) {
+      // Classify each consecutive pair of D·P points inside a segment.
+      // Between segments: no feature pushed → visually blank (matches LINE "> 20 min" rule).
+      const classify = (dtSec: number): "solid" | "gap" | "gap-long" | "blank" => {
+        const lower = GAP.lowerThresholdSec(null);
+        if (dtSec < lower)                   return "solid";
+        if (dtSec <= GAP.SHORT_UPPER_SEC)    return "gap";
+        if (dtSec <= GAP.LONG_SEC)           return "gap-long";
+        return "blank";
+      };
+
+      for (const seg of segments) {
+        const pts = seg.coords;
+        let solidRun: [number, number][] = [[pts[0][0], pts[0][1]]];
+
+        const flushSolid = () => {
           if (solidRun.length >= 2) {
             features.push({ type: "Feature", properties: { t: "line" },
               geometry: { type: "LineString", coordinates: solidRun } });
           }
           solidRun = [];
-          features.push({ type: "Feature", properties: { t: "gap" },
-            geometry: { type: "LineString", coordinates: [[lon1, lat1], [lon2, lat2]] } });
-        } else {
-          solidRun.push([lon2, lat2]);
+        };
+
+        for (let i = 0; i < pts.length - 1; i++) {
+          const [lon1, lat1, , t1] = pts[i];
+          const [lon2, lat2, , t2] = pts[i + 1];
+          const kind = classify(Math.max(0, t2 - t1));
+          if (kind === "solid") {
+            solidRun.push([lon2, lat2]);
+          } else if (kind === "blank") {
+            // No line; end current solid run, start fresh at next point.
+            flushSolid();
+            solidRun = [[lon2, lat2]];
+          } else {
+            // "gap" or "gap-long" — emit a single-segment dashed feature.
+            flushSolid();
+            features.push({ type: "Feature", properties: { t: kind },
+              geometry: { type: "LineString", coordinates: [[lon1, lat1], [lon2, lat2]] } });
+            solidRun = [[lon2, lat2]];
+          }
         }
-      }
-      if (solidRun.length >= 2) {
-        features.push({ type: "Feature", properties: { t: "line" },
-          geometry: { type: "LineString", coordinates: solidRun } });
+        flushSolid();
       }
 
-      // FROM/TO dots — brug første/sidste komprimerede punkt (matcher LINE positionelt)
+      // FROM = first D·P point of first segment. TO = last D·P point of last segment.
+      const first = segments[0].coords[0];
+      const lastSeg = segments[segments.length - 1].coords;
+      const last  = lastSeg[lastSeg.length - 1];
       features.push(
-        { type: "Feature", properties: { t: "dot", label: `FROM ${fmtT(tr ? tr[0]/1000 : coords[0][3])}` },
-          geometry: { type: "Point", coordinates: [coords[0][0], coords[0][1]] } },
-        { type: "Feature", properties: { t: "dot", label: `TO ${fmtT(tr ? tr[1]/1000 : coords[coords.length-1][3])}` },
-          geometry: { type: "Point", coordinates: [coords[coords.length-1][0], coords[coords.length-1][1]] } },
+        { type: "Feature", properties: { t: "dot", label: `FROM ${fmtT(tr ? tr[0]/1000 : first[3])}` },
+          geometry: { type: "Point", coordinates: [first[0], first[1]] } },
+        { type: "Feature", properties: { t: "dot", label: `TO ${fmtT(tr ? tr[1]/1000 : last[3])}` },
+          geometry: { type: "Point", coordinates: [last[0], last[1]] } },
       );
 
       (map.getSource(DOUGLAS_SOURCE) as maplibregl.GeoJSONSource)?.setData({
@@ -934,14 +1054,24 @@ export default function TrackLayer({
     });
   }, [map, douglasMode, selectedMmsi, timeRange]);
 
-  // ── re-render when timeRange changes ───────────────────────────────────────
+  // ── single render effect: data + timeRange together ─────────────────────────
+  // The SOURCE is the single source of truth for what's painted. We only paint
+  // when BOTH the points (dataVersion) and the filter (timeRange) are ready —
+  // otherwise we leave the source empty. This is what kills the "long track
+  // flash on click": no premature render with stale/null filter.
   useEffect(() => {
     if (!map || !map.getSource(SOURCE)) return;
     const points = allPointsRef.current;
-    if (!points.length) return;
-    (map.getSource(SOURCE)          as maplibregl.GeoJSONSource)?.setData(buildGeoJSON(points, timeRange, livePositionRef.current, map.getZoom()));
-    (map.getSource(ENDPOINT_SOURCE) as maplibregl.GeoJSONSource)?.setData(buildEndpointGeoJSON(points, timeRange));
-  }, [map, timeRange]);
+    const src    = map.getSource(SOURCE)          as maplibregl.GeoJSONSource;
+    const epSrc  = map.getSource(ENDPOINT_SOURCE) as maplibregl.GeoJSONSource;
+    if (!points.length || !timeRange) {
+      src?.setData({ type: "FeatureCollection", features: [] });
+      epSrc?.setData({ type: "FeatureCollection", features: [] });
+      return;
+    }
+    src?.setData(buildGeoJSON(points, timeRange, livePositionRef.current, map.getZoom()));
+    epSrc?.setData(buildEndpointGeoJSON(points, timeRange));
+  }, [map, timeRange, dataVersion]);
 
 
   // ── focused position — interpolated, not snapped ──────────────────────────

@@ -1,0 +1,772 @@
+<!doctype html>
+<html lang="da">
+<head>
+<meta charset="utf-8">
+<title>aiss · time v3 · NLE-style</title>
+<style>
+  :root {
+    --bg: #060D1A;
+    --bg-2: #0B1628;
+    --bg-3: #101E35;
+    --bg-4: #152640;
+    --line: #1A2C48;
+    --line-2: #253B5E;
+    --text: #E6EEF7;
+    --muted: #6B7F99;
+    --dim: #8FA0B8;
+    --aqua: #2BA8C8;
+    --aqua-dim: #1A6A80;
+    --accent: #F59E0B;
+    --good: #00E676;
+    --ruler: #40587A;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    background: var(--bg); color: var(--text);
+    font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace;
+    font-size: 12px;
+    user-select: none;
+  }
+  .page { padding: 24px 24px 96px; max-width: 1100px; margin: 0 auto; }
+  h1 {
+    font-size: 16px; font-weight: 500; letter-spacing: 0.02em;
+    margin: 0 0 4px;
+  }
+  .sub {
+    color: var(--muted); font-size: 11px;
+    line-height: 1.6; margin: 0 0 24px;
+  }
+  kbd {
+    background: var(--bg-2); border: 1px solid var(--line);
+    padding: 1px 5px; border-radius: 3px;
+    font-family: inherit; font-size: 10px;
+  }
+
+  /* ---------- Card ---------- */
+  .card {
+    background: var(--bg-2);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 14px;
+  }
+
+  /* ---------- Header row: readouts + presets ---------- */
+  .hdr {
+    display: flex; align-items: center; gap: 16px;
+    margin-bottom: 14px; flex-wrap: wrap;
+  }
+  .readout {
+    display: flex; align-items: baseline; gap: 6px;
+  }
+  .readout .label {
+    font-size: 9px; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--muted);
+  }
+  .readout .value {
+    font-size: 13px; color: var(--text); letter-spacing: 0.02em;
+  }
+  .readout .value.accent { color: var(--accent); }
+  .readout .value.aqua { color: var(--aqua); }
+  .sep { flex: 1; }
+  .zoom-chips { display: flex; gap: 3px; flex-wrap: wrap; }
+  .zoom-chips .chip {
+    background: transparent; border: 1px solid var(--line);
+    color: var(--dim); padding: 4px 8px; border-radius: 3px;
+    font-family: inherit; font-size: 10px; cursor: pointer;
+    transition: all 120ms;
+  }
+  .zoom-chips .chip:hover { border-color: var(--aqua-dim); color: var(--text); }
+  .zoom-chips .chip.active {
+    border-color: var(--aqua); color: var(--aqua);
+    background: rgba(43, 168, 200, 0.08);
+  }
+
+  /* ---------- Mini-map (project strip) ---------- */
+  .mini-wrap {
+    position: relative;
+    height: 36px;
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    margin-bottom: 4px;
+    overflow: hidden;
+    cursor: pointer;
+  }
+  .mini-bars {
+    display: flex; align-items: flex-end;
+    height: 100%; padding: 4px 2px;
+    gap: 1px;
+  }
+  .mini-bars .bar {
+    flex: 1; background: var(--aqua-dim);
+    min-height: 1px; border-radius: 1px 1px 0 0;
+    opacity: 0.55;
+  }
+  .mini-viewport {
+    position: absolute;
+    top: 0; bottom: 0;
+    background: rgba(43, 168, 200, 0.12);
+    border-left: 2px solid var(--aqua);
+    border-right: 2px solid var(--aqua);
+    cursor: grab;
+    min-width: 4px;
+  }
+  .mini-viewport:active { cursor: grabbing; }
+  .mini-viewport .edge {
+    position: absolute;
+    top: 0; bottom: 0; width: 8px;
+    cursor: ew-resize;
+    background: transparent;
+  }
+  .mini-viewport .edge.left { left: -6px; }
+  .mini-viewport .edge.right { right: -6px; }
+  .mini-labels {
+    display: flex; justify-content: space-between;
+    color: var(--muted); font-size: 10px;
+    padding: 0 2px; margin-bottom: 12px;
+  }
+
+  /* ---------- Ruler ---------- */
+  .ruler {
+    position: relative;
+    height: 18px;
+    border-top: 1px solid var(--line);
+    border-bottom: 1px solid var(--line);
+    background: var(--bg);
+    overflow: hidden;
+  }
+  .ruler .tick {
+    position: absolute;
+    top: 0; bottom: 0;
+    border-left: 1px solid var(--ruler);
+  }
+  .ruler .tick.major { border-left-color: var(--line-2); }
+  .ruler .tick span {
+    position: absolute;
+    left: 4px; bottom: 2px;
+    font-size: 9px; color: var(--muted);
+    letter-spacing: 0.02em; white-space: nowrap;
+  }
+
+  /* ---------- Main timeline ---------- */
+  .main-wrap {
+    position: relative;
+    background: var(--bg);
+    border-left: 1px solid var(--line);
+    border-right: 1px solid var(--line);
+    border-bottom: 1px solid var(--line);
+    border-radius: 0 0 3px 3px;
+    overflow: hidden;
+  }
+  .main-timeline {
+    position: relative;
+    height: 96px;
+    cursor: crosshair;
+  }
+  .main-bars {
+    position: absolute; inset: 0;
+    display: flex; align-items: flex-end;
+    padding: 8px 2px 4px;
+    gap: 1px;
+  }
+  .main-bars .bar {
+    flex: 1; background: var(--aqua-dim);
+    min-height: 1px; border-radius: 1px 1px 0 0;
+  }
+  .main-bars .bar.hot { background: var(--aqua); }
+  .playhead {
+    position: absolute;
+    top: 0; bottom: 0;
+    width: 1px;
+    background: var(--accent);
+    box-shadow: 0 0 6px var(--accent);
+    pointer-events: none;
+    will-change: left;
+  }
+  .playhead .handle {
+    position: absolute;
+    top: -2px; left: -5px;
+    width: 11px; height: 11px;
+    background: var(--accent);
+    clip-path: polygon(50% 100%, 0% 0%, 100% 0%);
+  }
+
+  /* ---------- Controls ---------- */
+  .controls {
+    display: flex; align-items: center; gap: 10px;
+    margin-top: 12px; flex-wrap: wrap;
+  }
+  .btn {
+    background: var(--bg); border: 1px solid var(--line);
+    color: var(--text); padding: 5px 10px; border-radius: 3px;
+    font-family: inherit; font-size: 11px; cursor: pointer;
+    display: inline-flex; align-items: center; gap: 4px;
+  }
+  .btn:hover { border-color: var(--aqua); }
+  .btn.primary {
+    background: var(--aqua); color: #000; border-color: var(--aqua);
+    font-weight: 600; min-width: 40px; justify-content: center;
+  }
+  .btn.primary:hover { background: #3FC8E8; }
+
+  .jump-input {
+    background: var(--bg); border: 1px solid var(--line);
+    color: var(--text); padding: 5px 8px; border-radius: 3px;
+    font-family: inherit; font-size: 11px; width: 180px;
+  }
+  .jump-input:focus { outline: none; border-color: var(--aqua); }
+  .jump-label { color: var(--muted); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; }
+
+  /* ---------- Tips ---------- */
+  .tips {
+    margin-top: 32px; color: var(--muted);
+    font-size: 11px; line-height: 1.7;
+    max-width: 700px;
+  }
+  .tips h3 {
+    font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--text); margin: 20px 0 6px;
+  }
+  .tips code {
+    background: var(--bg-2); padding: 1px 5px; border-radius: 3px;
+    color: var(--dim);
+  }
+</style>
+</head>
+<body>
+<div class="page">
+  <h1>aiss · time v3 — NLE-style</h1>
+  <p class="sub">
+    Tre-lags model. <strong>Projekt-strip</strong> (øverst) = hele datasættet fra båden/området — flere år. <strong>Timeline</strong> (nedenunder) = det zoomede vindue. <strong>Playhead</strong> = øjeblikket inde i vinduet. Zoom i main med <kbd>scroll</kbd>, pan med <kbd>drag</kbd>, flyt viewport på mini-strippen med <kbd>drag</kbd>, resize i enderne.
+  </p>
+
+  <div class="card">
+    <!-- Header readouts -->
+    <div class="hdr">
+      <div class="readout">
+        <span class="label">Viewport</span>
+        <span class="value aqua" id="vpReadout">—</span>
+      </div>
+      <div class="readout">
+        <span class="label">Playhead</span>
+        <span class="value accent" id="phReadout">—</span>
+      </div>
+      <div class="sep"></div>
+      <div class="zoom-chips" id="zoomChips">
+        <button class="chip" data-span="900000">15m</button>
+        <button class="chip" data-span="3600000">1t</button>
+        <button class="chip" data-span="21600000">6t</button>
+        <button class="chip active" data-span="86400000">1d</button>
+        <button class="chip" data-span="604800000">7d</button>
+        <button class="chip" data-span="2592000000">30d</button>
+        <button class="chip" data-span="31536000000">1y</button>
+        <button class="chip" data-span="all">Alt</button>
+      </div>
+    </div>
+
+    <!-- Mini-map / project strip -->
+    <div class="mini-wrap" id="miniWrap">
+      <div class="mini-bars" id="miniBars"></div>
+      <div class="mini-viewport" id="miniViewport">
+        <div class="edge left"></div>
+        <div class="edge right"></div>
+      </div>
+    </div>
+    <div class="mini-labels">
+      <span id="projStart">—</span>
+      <span id="projEnd">—</span>
+    </div>
+
+    <!-- Ruler -->
+    <div class="ruler" id="ruler"></div>
+
+    <!-- Main timeline -->
+    <div class="main-wrap">
+      <div class="main-timeline" id="mainTimeline">
+        <div class="main-bars" id="mainBars"></div>
+        <div class="playhead" id="playhead"><div class="handle"></div></div>
+      </div>
+    </div>
+
+    <!-- Controls -->
+    <div class="controls">
+      <button class="btn" id="backBtn">◀◀ &nbsp;<span id="backLabel">−1t</span></button>
+      <button class="btn primary" id="playBtn">▶</button>
+      <button class="btn" id="fwdBtn"><span id="fwdLabel">+1t</span>&nbsp; ▶▶</button>
+      <div class="sep"></div>
+      <span class="jump-label">Hop til</span>
+      <input class="jump-input" id="jumpInput" placeholder='"i går 12:00", "2026-04-16 14:00"'>
+      <button class="btn" id="jumpBtn">Go</button>
+    </div>
+  </div>
+
+  <div class="tips">
+    <h3>Prøv det — havnefogeden</h3>
+    <p>
+      Skriv <code>i går 12:00</code> i "Hop til" og tryk Go. Playhead flytter dertil. Klik <code>15m</code>-chippen. Nu viser timeline præcis 15 minutter omkring ham. Det er to klik for havnefogedens præcise vindue.
+    </p>
+
+    <h3>Prøv det — fragtskibet (4 år)</h3>
+    <p>
+      Klik <code>Alt</code>-chippen. Projekt-strippen og main timeline viser samme ting — hele karrieren. Scroll-zoom på main for at gå ind, eller træk viewport-kassen på mini-strippen. Du kan zoome helt ned til 15 min uden at miste overblikket: mini-strippen viser stadig hele karrieren med viewport-kassen som en tynd streg.
+    </p>
+
+    <h3>Prøv det — jordomsejleren</h3>
+    <p>
+      <code>1y</code>-chippen giver et års viewport. Scroll i main for at zoome ind på en havn-periode. Drag på main for at pan. Mini-strippen viser altid det fulde billede — du er aldrig fortabt.
+    </p>
+
+    <h3>Tastatur</h3>
+    <p>
+      <kbd>Space</kbd> play/pause · <kbd>←</kbd> <kbd>→</kbd> playhead et viewport-tiendel · <kbd>Shift</kbd>+<kbd>←</kbd>/<kbd>→</kbd> et helt viewport · <kbd>+</kbd>/<kbd>−</kbd> zoom ind/ud · <kbd>Home</kbd>/<kbd>End</kbd> start/slut
+    </p>
+
+    <h3>Hvad der er nyt i forhold til forrige mockup</h3>
+    <p>
+      Tre lag i stedet for to. Mini-strip er altid synlig — du mister aldrig kontekst. Zoom-chips ændrer *viewport-bredden* (ikke hele intervallet) — når du vælger 15m mens du står i går kl 12:00, får du "i går 11:52:30 – 12:07:30". Ruler viser tick-marks med tider der auto-tilpasser sig zoom-niveau (sekunder/minutter/timer/dage/måneder/år).
+    </p>
+  </div>
+</div>
+
+<script>
+(() => {
+  // ---------- Fake project data: 2 years of activity with clusters ----------
+  const PROJECT_START = Date.UTC(2024, 3, 1); // Apr 2024
+  const PROJECT_END   = Date.UTC(2026, 3, 17, 23, 59, 59); // today-ish
+  const PROJECT_SPAN  = PROJECT_END - PROJECT_START;
+
+  // ---------- State ----------
+  const state = {
+    projStart: PROJECT_START,
+    projEnd: PROJECT_END,
+    vpStart: 0,
+    vpEnd: 0,
+    playhead: 0,
+    playing: false,
+    speed: 10,   // x realtime for playback
+  };
+
+  // ---------- Elements ----------
+  const $miniWrap = document.getElementById('miniWrap');
+  const $miniBars = document.getElementById('miniBars');
+  const $miniVp = document.getElementById('miniViewport');
+  const $ruler = document.getElementById('ruler');
+  const $mainWrap = document.getElementById('mainTimeline');
+  const $mainBars = document.getElementById('mainBars');
+  const $playhead = document.getElementById('playhead');
+  const $vpReadout = document.getElementById('vpReadout');
+  const $phReadout = document.getElementById('phReadout');
+  const $projStart = document.getElementById('projStart');
+  const $projEnd = document.getElementById('projEnd');
+  const $backBtn = document.getElementById('backBtn');
+  const $fwdBtn = document.getElementById('fwdBtn');
+  const $backLabel = document.getElementById('backLabel');
+  const $fwdLabel = document.getElementById('fwdLabel');
+  const $playBtn = document.getElementById('playBtn');
+  const $jumpInput = document.getElementById('jumpInput');
+  const $jumpBtn = document.getElementById('jumpBtn');
+  const $chips = document.getElementById('zoomChips');
+
+  // ---------- Helpers ----------
+  const pad = n => String(n).padStart(2, '0');
+  function fmtFull(ms) {
+    const d = new Date(ms);
+    return d.getUTCFullYear() + '-' + pad(d.getUTCMonth()+1) + '-' + pad(d.getUTCDate())
+      + ' ' + pad(d.getUTCHours()) + ':' + pad(d.getUTCMinutes()) + ':' + pad(d.getUTCSeconds());
+  }
+  function fmtCompact(ms, span) {
+    const d = new Date(ms);
+    if (span < 2*3600_000) return pad(d.getUTCHours())+':'+pad(d.getUTCMinutes())+':'+pad(d.getUTCSeconds());
+    if (span < 48*3600_000) return pad(d.getUTCHours())+':'+pad(d.getUTCMinutes());
+    if (span < 45*86400_000) return pad(d.getUTCMonth()+1)+'-'+pad(d.getUTCDate())+' '+pad(d.getUTCHours())+':'+pad(d.getUTCMinutes());
+    if (span < 2*365*86400_000) return d.getUTCFullYear()+'-'+pad(d.getUTCMonth()+1)+'-'+pad(d.getUTCDate());
+    return d.getUTCFullYear()+'-'+pad(d.getUTCMonth()+1);
+  }
+  function fmtDur(ms) {
+    const s = Math.floor(ms/1000);
+    if (s < 60) return s+'s';
+    if (s < 3600) return Math.floor(s/60)+'m';
+    if (s < 86400) return (s/3600).toFixed(1)+'t';
+    if (s < 30*86400) return Math.floor(s/86400)+'d';
+    if (s < 2*365*86400) return Math.floor(s/(30*86400))+'mdr';
+    return (s/(365*86400)).toFixed(1)+'år';
+  }
+
+  // ---------- Density data ----------
+  function seeded(seed) {
+    let s = seed;
+    return () => { s = (s * 9301 + 49297) % 233280; return s/233280; };
+  }
+  // Raw "events": cluster centers with spreads, representing voyages/stays
+  const VOYAGES = (() => {
+    const r = seeded(42);
+    const out = [];
+    // generate ~50 voyage peaks over 2 years
+    for (let i = 0; i < 60; i++) {
+      const center = PROJECT_START + r() * PROJECT_SPAN;
+      const width  = (0.3 + r() * 4) * 86400_000; // 0.3 – 4 days per voyage
+      const peak   = 0.3 + r() * 0.7;
+      out.push({ center, width, peak });
+    }
+    // two big "stay" clusters (at-port periods)
+    for (let i = 0; i < 6; i++) {
+      const center = PROJECT_START + r() * PROJECT_SPAN;
+      const width  = (3 + r() * 10) * 86400_000;
+      out.push({ center, width, peak: 0.5 + r()*0.4 });
+    }
+    return out;
+  })();
+  function densityAt(ms) {
+    let sum = 0;
+    for (const v of VOYAGES) {
+      const dx = (ms - v.center) / v.width;
+      sum += v.peak * Math.exp(-dx*dx);
+    }
+    return Math.min(1, sum);
+  }
+  function densitySeries(fromMs, toMs, n) {
+    const out = new Float32Array(n);
+    const step = (toMs - fromMs) / n;
+    for (let i = 0; i < n; i++) {
+      // integrate a few samples inside the bucket for smoothness at wide zoom
+      let s = 0;
+      const samples = 3;
+      for (let k = 0; k < samples; k++) {
+        s += densityAt(fromMs + (i + k/samples) * step);
+      }
+      out[i] = s / samples;
+    }
+    return out;
+  }
+
+  // ---------- Render: mini-map ----------
+  function renderMini() {
+    const N = 120;
+    const d = densitySeries(PROJECT_START, PROJECT_END, N);
+    $miniBars.innerHTML = '';
+    for (const v of d) {
+      const b = document.createElement('div');
+      b.className = 'bar';
+      b.style.height = (v * 100) + '%';
+      $miniBars.appendChild(b);
+    }
+    $projStart.textContent = fmtCompact(PROJECT_START, PROJECT_SPAN);
+    $projEnd.textContent = fmtCompact(PROJECT_END, PROJECT_SPAN);
+  }
+  function updateMiniViewport() {
+    const left = (state.vpStart - PROJECT_START) / PROJECT_SPAN * 100;
+    const width = (state.vpEnd - state.vpStart) / PROJECT_SPAN * 100;
+    $miniVp.style.left = left + '%';
+    $miniVp.style.width = Math.max(0.3, width) + '%';
+  }
+
+  // ---------- Render: ruler ----------
+  function renderRuler() {
+    const span = state.vpEnd - state.vpStart;
+    $ruler.innerHTML = '';
+    // choose step size
+    const steps = [
+      { ms: 1000, min: 0,                 fmt: ms => new Date(ms).toISOString().substr(11,8) },
+      { ms: 10_000, min: 5_000,           fmt: ms => new Date(ms).toISOString().substr(11,8) },
+      { ms: 60_000, min: 30_000,          fmt: ms => new Date(ms).toISOString().substr(11,5) },
+      { ms: 5*60_000, min: 150_000,       fmt: ms => new Date(ms).toISOString().substr(11,5) },
+      { ms: 15*60_000, min: 600_000,      fmt: ms => new Date(ms).toISOString().substr(11,5) },
+      { ms: 60*60_000, min: 2_400_000,    fmt: ms => new Date(ms).toISOString().substr(11,5) },
+      { ms: 6*3600_000, min: 14_400_000,  fmt: ms => new Date(ms).toISOString().substr(5,11).replace('T', ' ') },
+      { ms: 86400_000, min: 43_200_000,   fmt: ms => new Date(ms).toISOString().substr(5,5) },
+      { ms: 7*86400_000, min: 345_600_000,fmt: ms => new Date(ms).toISOString().substr(5,5) },
+      { ms: 30*86400_000, min: 1728_000_000, fmt: ms => new Date(ms).toISOString().substr(0,7) },
+      { ms: 365*86400_000, min: 17e9,     fmt: ms => new Date(ms).toISOString().substr(0,4) },
+    ];
+    const targetTicks = 8;
+    let chosen = steps[steps.length-1];
+    for (const s of steps) { if (span / s.ms >= 3 && span / s.ms <= 30) { chosen = s; break; } }
+    for (const s of steps) { if (Math.abs(span / s.ms - targetTicks) < 8 && s.min <= span/4) chosen = s; }
+    // best guess: pick first step where span/step ~ targetTicks
+    chosen = steps.reduce((best, s) => {
+      const diff = Math.abs(span/s.ms - targetTicks);
+      const bdiff = Math.abs(span/best.ms - targetTicks);
+      return diff < bdiff ? s : best;
+    }, steps[0]);
+
+    const start = Math.ceil(state.vpStart / chosen.ms) * chosen.ms;
+    for (let t = start; t < state.vpEnd; t += chosen.ms) {
+      const pct = (t - state.vpStart) / span * 100;
+      const tick = document.createElement('div');
+      tick.className = 'tick major';
+      tick.style.left = pct + '%';
+      const lbl = document.createElement('span');
+      lbl.textContent = chosen.fmt(t);
+      tick.appendChild(lbl);
+      $ruler.appendChild(tick);
+    }
+  }
+
+  // ---------- Render: main timeline ----------
+  function renderMain() {
+    const span = state.vpEnd - state.vpStart;
+    // adaptive bar count
+    const N = Math.max(60, Math.min(200, Math.floor($mainWrap.clientWidth / 4)));
+    const d = densitySeries(state.vpStart, state.vpEnd, N);
+    $mainBars.innerHTML = '';
+    const max = Math.max(0.001, ...d);
+    for (const v of d) {
+      const b = document.createElement('div');
+      b.className = 'bar' + (v / max > 0.7 ? ' hot' : '');
+      b.style.height = Math.min(100, (v / max) * 100) + '%';
+      $mainBars.appendChild(b);
+    }
+  }
+  function updatePlayhead() {
+    const span = state.vpEnd - state.vpStart;
+    if (state.playhead < state.vpStart || state.playhead > state.vpEnd) {
+      $playhead.style.display = 'none';
+    } else {
+      $playhead.style.display = '';
+      const pct = (state.playhead - state.vpStart) / span * 100;
+      $playhead.style.left = pct + '%';
+    }
+    $phReadout.textContent = fmtFull(state.playhead);
+  }
+  function updateReadouts() {
+    const span = state.vpEnd - state.vpStart;
+    $vpReadout.textContent = fmtCompact(state.vpStart, span) + ' → ' + fmtCompact(state.vpEnd, span) + ' (' + fmtDur(span) + ')';
+    $phReadout.textContent = fmtFull(state.playhead);
+    $backLabel.textContent = '−' + fmtDur(span/10);
+    $fwdLabel.textContent = '+' + fmtDur(span/10);
+  }
+
+  // ---------- Render all ----------
+  function render() {
+    renderMain();
+    renderRuler();
+    updateMiniViewport();
+    updatePlayhead();
+    updateReadouts();
+  }
+
+  // ---------- Actions ----------
+  function setViewport(start, end, keepPh = true) {
+    const MIN_SPAN = 60_000; // 1 min
+    if (end - start < MIN_SPAN) end = start + MIN_SPAN;
+    if (start < PROJECT_START) { end += PROJECT_START - start; start = PROJECT_START; }
+    if (end > PROJECT_END) { start -= end - PROJECT_END; end = PROJECT_END; if (start < PROJECT_START) start = PROJECT_START; }
+    state.vpStart = start;
+    state.vpEnd = end;
+    if (!keepPh || state.playhead < start || state.playhead > end) {
+      state.playhead = (start + end) / 2;
+    }
+    render();
+  }
+  function setViewportSpanCentered(span, around) {
+    const center = around ?? state.playhead ?? (state.vpStart + state.vpEnd)/2;
+    if (span === 'all') { setViewport(PROJECT_START, PROJECT_END); return; }
+    setViewport(center - span/2, center + span/2);
+  }
+  function panViewport(dms) {
+    setViewport(state.vpStart + dms, state.vpEnd + dms);
+  }
+  function zoomViewport(factor, anchor) {
+    const span = state.vpEnd - state.vpStart;
+    const a = anchor ?? (state.vpStart + span/2);
+    const newSpan = Math.max(60_000, Math.min(PROJECT_SPAN, span * factor));
+    const t = (a - state.vpStart) / span;
+    setViewport(a - newSpan * t, a + newSpan * (1 - t));
+  }
+
+  // ---------- Drag: mini viewport ----------
+  let dragMode = null;
+  let dragStartX = 0;
+  let dragInitial = null;
+  $miniVp.addEventListener('pointerdown', (e) => {
+    if (e.target.classList.contains('edge')) {
+      dragMode = e.target.classList.contains('left') ? 'resize-l' : 'resize-r';
+    } else {
+      dragMode = 'pan';
+    }
+    dragStartX = e.clientX;
+    dragInitial = { start: state.vpStart, end: state.vpEnd };
+    e.target.setPointerCapture(e.pointerId);
+    e.stopPropagation();
+  });
+  $miniVp.addEventListener('pointermove', (e) => {
+    if (!dragMode) return;
+    const r = $miniWrap.getBoundingClientRect();
+    const dPx = e.clientX - dragStartX;
+    const dMs = (dPx / r.width) * PROJECT_SPAN;
+    if (dragMode === 'pan') {
+      setViewport(dragInitial.start + dMs, dragInitial.end + dMs);
+    } else if (dragMode === 'resize-l') {
+      setViewport(dragInitial.start + dMs, dragInitial.end);
+    } else if (dragMode === 'resize-r') {
+      setViewport(dragInitial.start, dragInitial.end + dMs);
+    }
+  });
+  $miniVp.addEventListener('pointerup', () => { dragMode = null; });
+  $miniVp.addEventListener('pointercancel', () => { dragMode = null; });
+
+  // ---------- Click mini to jump ----------
+  $miniWrap.addEventListener('click', (e) => {
+    if (e.target.closest('#miniViewport')) return;
+    const r = $miniWrap.getBoundingClientRect();
+    const t = (e.clientX - r.left) / r.width;
+    const target = PROJECT_START + t * PROJECT_SPAN;
+    const span = state.vpEnd - state.vpStart;
+    setViewport(target - span/2, target + span/2);
+  });
+
+  // ---------- Main timeline: drag to pan, wheel to zoom, click to move playhead ----------
+  let mainDrag = null;
+  $mainWrap.addEventListener('pointerdown', (e) => {
+    mainDrag = { x: e.clientX, vpStart: state.vpStart, vpEnd: state.vpEnd, moved: false };
+    $mainWrap.setPointerCapture(e.pointerId);
+  });
+  $mainWrap.addEventListener('pointermove', (e) => {
+    if (!mainDrag) return;
+    const dx = e.clientX - mainDrag.x;
+    if (Math.abs(dx) > 3) mainDrag.moved = true;
+    if (!mainDrag.moved) return;
+    const r = $mainWrap.getBoundingClientRect();
+    const span = mainDrag.vpEnd - mainDrag.vpStart;
+    const dMs = -(dx / r.width) * span;
+    setViewport(mainDrag.vpStart + dMs, mainDrag.vpEnd + dMs);
+  });
+  $mainWrap.addEventListener('pointerup', (e) => {
+    if (mainDrag && !mainDrag.moved) {
+      // click-to-move-playhead
+      const r = $mainWrap.getBoundingClientRect();
+      const t = (e.clientX - r.left) / r.width;
+      state.playhead = state.vpStart + t * (state.vpEnd - state.vpStart);
+      updatePlayhead();
+      updateReadouts();
+    }
+    mainDrag = null;
+  });
+  $mainWrap.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const r = $mainWrap.getBoundingClientRect();
+    const t = (e.clientX - r.left) / r.width;
+    const anchor = state.vpStart + t * (state.vpEnd - state.vpStart);
+    const factor = e.deltaY > 0 ? 1.25 : 0.8;
+    zoomViewport(factor, anchor);
+  }, { passive: false });
+
+  // ---------- Zoom chips ----------
+  $chips.addEventListener('click', (e) => {
+    const chip = e.target.closest('.chip'); if (!chip) return;
+    document.querySelectorAll('#zoomChips .chip').forEach(c => c.classList.remove('active'));
+    chip.classList.add('active');
+    const s = chip.dataset.span;
+    if (s === 'all') setViewportSpanCentered('all');
+    else setViewportSpanCentered(+s);
+  });
+
+  // ---------- Playback ----------
+  let rafId = null;
+  let lastFrame = 0;
+  function tick(now) {
+    if (!lastFrame) lastFrame = now;
+    const dt = now - lastFrame;
+    lastFrame = now;
+    // speed based on viewport span — cover span in ~15 seconds at default
+    const span = state.vpEnd - state.vpStart;
+    const speedMs = span / 15_000; // ms of data per ms of real time
+    state.playhead += dt * speedMs;
+    if (state.playhead >= state.vpEnd) { state.playhead = state.vpEnd; stopPlay(); }
+    updatePlayhead();
+    updateReadouts();
+    if (state.playing) rafId = requestAnimationFrame(tick);
+  }
+  function startPlay() {
+    if (state.playhead >= state.vpEnd) state.playhead = state.vpStart;
+    state.playing = true; lastFrame = 0;
+    $playBtn.textContent = '❚❚';
+    rafId = requestAnimationFrame(tick);
+  }
+  function stopPlay() {
+    state.playing = false;
+    $playBtn.textContent = '▶';
+    if (rafId) cancelAnimationFrame(rafId);
+  }
+  $playBtn.addEventListener('click', () => state.playing ? stopPlay() : startPlay());
+  $backBtn.addEventListener('click', () => {
+    const span = state.vpEnd - state.vpStart;
+    state.playhead = Math.max(state.vpStart, state.playhead - span/10);
+    updatePlayhead(); updateReadouts();
+  });
+  $fwdBtn.addEventListener('click', () => {
+    const span = state.vpEnd - state.vpStart;
+    state.playhead = Math.min(state.vpEnd, state.playhead + span/10);
+    updatePlayhead(); updateReadouts();
+  });
+
+  // ---------- Jump input ----------
+  function parseNatural(str) {
+    if (!str) return null;
+    const s = str.trim().toLowerCase();
+    const now = Date.now();
+    if (s === 'nu' || s === 'now') return now;
+    if (s === 'i dag' || s === 'today') return new Date(new Date().setUTCHours(0,0,0,0)).getTime();
+    if (s === 'i går' || s === 'yesterday') return new Date(new Date().setUTCHours(0,0,0,0)).getTime() - 86400_000;
+    const m = s.match(/^(\d{4})-(\d{2})-(\d{2})(?:[ t](\d{1,2}):(\d{2})(?::(\d{2}))?)?$/);
+    if (m) return Date.UTC(+m[1], +m[2]-1, +m[3], +(m[4]||0), +(m[5]||0), +(m[6]||0));
+    const rel = s.match(/^(\d+)\s*(dage|dag|days|day|timer|time|hours|hour)\s*siden$/);
+    if (rel) {
+      const n = +rel[1];
+      const unit = rel[2].startsWith('d') ? 86400_000 : 3600_000;
+      return now - n * unit;
+    }
+    const yesterdayTime = s.match(/^(i går|yesterday)\s+(\d{1,2}):(\d{2})$/);
+    if (yesterdayTime) {
+      const base = new Date(new Date().setUTCHours(0,0,0,0)).getTime() - 86400_000;
+      return base + (+yesterdayTime[2])*3600_000 + (+yesterdayTime[3])*60_000;
+    }
+    return null;
+  }
+  function jump() {
+    const t = parseNatural($jumpInput.value);
+    if (!t) {
+      $jumpInput.style.borderColor = '#FF5252';
+      setTimeout(() => $jumpInput.style.borderColor = '', 900);
+      return;
+    }
+    // clamp into project
+    const target = Math.max(PROJECT_START, Math.min(PROJECT_END, t));
+    state.playhead = target;
+    // recenter viewport if playhead falls outside
+    if (target < state.vpStart || target > state.vpEnd) {
+      const span = state.vpEnd - state.vpStart;
+      setViewport(target - span/2, target + span/2);
+    } else {
+      updatePlayhead(); updateReadouts();
+    }
+  }
+  $jumpBtn.addEventListener('click', jump);
+  $jumpInput.addEventListener('keydown', e => { if (e.key === 'Enter') jump(); });
+
+  // ---------- Keyboard ----------
+  window.addEventListener('keydown', (e) => {
+    if (e.target.tagName === 'INPUT') return;
+    const span = state.vpEnd - state.vpStart;
+    if (e.code === 'Space') { e.preventDefault(); state.playing ? stopPlay() : startPlay(); }
+    else if (e.code === 'ArrowLeft' && e.shiftKey) panViewport(-span);
+    else if (e.code === 'ArrowRight' && e.shiftKey) panViewport(span);
+    else if (e.code === 'ArrowLeft')  { state.playhead = Math.max(state.vpStart, state.playhead - span/10); updatePlayhead(); updateReadouts(); }
+    else if (e.code === 'ArrowRight') { state.playhead = Math.min(state.vpEnd, state.playhead + span/10); updatePlayhead(); updateReadouts(); }
+    else if (e.key === '+' || e.key === '=') zoomViewport(0.6, state.playhead);
+    else if (e.key === '-') zoomViewport(1.6, state.playhead);
+    else if (e.code === 'Home') { state.playhead = state.vpStart; updatePlayhead(); updateReadouts(); }
+    else if (e.code === 'End')  { state.playhead = state.vpEnd; updatePlayhead(); updateReadouts(); }
+  });
+
+  // ---------- Init ----------
+  renderMini();
+  // default viewport: last 24h
+  const now = PROJECT_END;
+  state.playhead = now - 6*3600_000;
+  setViewport(now - 86400_000, now);
+})();
+</script>
+</body>
+</html>

@@ -1,35 +1,35 @@
-// ingest-positions — Supabase Edge Function (v9)
+// ingest-positions — Supabase Edge Function (v8)
 // Append-only ingest with full-accounting rejection observability.
 //
-// Normalise → (optional per-type speed lookup) → validate →
-// INSERT positions_v2 + UPSERT entity_last via ingest_positions_v2 RPC.
-// Rejections are classified per reason and persisted to
-// ingest_stats.reject_reasons.
+// Normalise → validate → INSERT positions_v2 + UPSERT entity_last via
+// ingest_positions_v2 RPC. Rejections are classified per reason and
+// persisted to ingest_stats.reject_reasons so PI rejection rate is visible
+// in SQL, not just in the Edge Function console.
 //
-// Changes vs v8:
-//   - Per-type MAX_SPEED_MS. Previous versions hard-coded 30 m/s (~58 kn),
-//     which is correct for conventional commercial vessels but rejects
-//     high-speed craft (Øresund hydrofoils, ~20–25 m/s genuine, but spiky
-//     GPS can briefly imply 40+), SAR aircraft (MMSI 111MID…, >80 m/s),
-//     and future drone/UAS sources. Per FASE-0 test plan §T7:
-//        default vessel       30 m/s
-//        HSC  (ship_type 40-49) 50 m/s
-//        SAR / pilot / law-enf  (50-55) 100 m/s
-//        aircraft (entity_type='aircraft' OR MMSI 111MID pattern) 300 m/s
-//        drone (entity_type='drone') 50 m/s
-//        unknown (MMSI present but no entity row yet) 40 m/s
-//     Threshold is looked up per batch via entities.domain_meta->>mmsi,
-//     so the cost is one SELECT per HTTP call, not per row.
-//   - Teleportation anomaly payload now records the applied threshold, so
-//     post-hoc analysis can distinguish "default MMSI exceeded vessel cap"
-//     from "SAR aircraft exceeded 300 m/s cap".
+// Changes vs v7:
+//   - Teleportation rejects → write_anomalies_batch RPC. The intra-batch
+//     anti-teleportation check already catches impossible hops (MMSI hijack,
+//     spoofing, GPS glitch). Up to v7 we just threw the offending row away
+//     and bumped a counter. Now we keep the evidence: prev lat/lon/t, next
+//     lat/lon/t, computed speed m/s, dt seconds — written to the anomalies
+//     table as severity='warn'. Best-effort: a failing anomaly log never
+//     breaks the main ingest path.
 //
-// Changes vs v7 → v8 (retained):
-//   - Teleportation rejects → write_anomalies_batch RPC.
-//   - supabase-js rpc() returns PostgrestBuilder, `.catch()` is undefined;
-//     wrapped ensure_partition in try/catch.
-//   - Widened MMSI range 1..999_999_999; pad to 9 digits.
-//   - Per-reason counters + top-level try/catch surfacing.
+// Changes vs v6:
+//   - Fix: supabase-js rpc() returns a PostgrestBuilder (PromiseLike), not
+//     a real Promise, so `.catch()` is undefined. Wrapped ensure_partition
+//     calls in try/catch instead — this was the root cause of the 500
+//     storm observed Apr 16 11:50+ UTC.
+//
+// Changes vs v2:
+//   - Widened MMSI range: 1 ≤ mmsi ≤ 999_999_999
+//     (accepts base stations 00MID…, SAR aircraft 111MID…, AtoN 99MID…,
+//     SART/MOB/EPIRB 97xMID…, which pyais strips leading zeros from.)
+//   - Zero-pads MMSI to 9 digits so entities.domain_meta.mmsi is consistent.
+//   - Per-reason counters: mmsi_invalid, invalid_coords, out_of_bounds,
+//     null_island, teleportation, duplicate_within_batch.
+//   - Passes p_edge_rejected + p_edge_reasons to the RPC for persistence.
+//   - Top-level try/catch surfaces unhandled exceptions in the HTTP body.
 //
 // Deno runtime.
 
@@ -55,12 +55,12 @@ interface RawPosition {
 }
 
 interface NormalizedRow {
-  mmsi: number
-  mmsi_str: string
+  mmsi: number            // numeric form (leading zeros stripped)
+  mmsi_str: string        // 9-digit zero-padded canonical form
   lat: number
   lon: number
-  t: number
-  sog: number | null
+  t: number               // unix epoch seconds
+  sog: number | null      // knots (original)
   cog: number | null
   hdg: number | null
   vessel_name: string | null
@@ -74,6 +74,7 @@ type RejectReason =
   | "teleportation"
   | "duplicate_within_batch"
 
+// Evidence row for the anomalies table — populated on teleportation rejects.
 interface TeleportEvidence {
   mmsi: number
   anomaly_type: "teleportation"
@@ -89,7 +90,6 @@ interface TeleportEvidence {
     dt_s: number
     speed_ms: number
     max_speed_ms: number
-    max_speed_source: "default" | "hsc" | "sar" | "aircraft" | "drone" | "unknown"
   }
 }
 
@@ -97,23 +97,10 @@ interface TeleportEvidence {
 // Constants
 // ---------------------------------------------------------------------------
 
-const MAX_SPEED_DEFAULT_MS = 30
-const MAX_SPEED_UNKNOWN_MS = 40      // MMSI seen, no entity row yet
-const MAX_SPEED_HSC_MS     = 50      // AIS ship_type 40-49
-const MAX_SPEED_SAR_MS     = 100     // ship_type 50-55, SAR ships
-const MAX_SPEED_AIRCRAFT_MS = 300    // SAR aircraft (MMSI 111MID, entity_type='aircraft')
-const MAX_SPEED_DRONE_MS   = 50      // entity_type='drone'
-
+const MAX_SPEED_MS = 30              // ~58 knots — hard reject on intra-batch hops
 const NULL_ISLAND_THRESHOLD = 0.001
-const DEDUP_WINDOW_SEC = 1
+const DEDUP_WINDOW_SEC = 1           // same MMSI within 1 s and < 10 m → dup
 const DEDUP_DIST_M = 10
-
-type SpeedSource = TeleportEvidence["details"]["max_speed_source"]
-
-interface SpeedResolution {
-  max_speed_ms: number
-  source: SpeedSource
-}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -139,52 +126,18 @@ function padMmsi(n: number): string {
   return String(Math.trunc(n)).padStart(9, "0")
 }
 
-// MMSI prefix 111 = SAR aircraft (ITU-R M.1371 §19)
-function looksLikeSarAircraft(mmsi: number): boolean {
-  const s = padMmsi(mmsi)
-  return s.startsWith("111")
-}
-
-// Resolve max speed from entity_type / ship_type lookup. `null` means no row
-// exists yet → fall back to "unknown" (slightly looser than default).
-function resolveMaxSpeed(
-  mmsi: number,
-  info: { entity_type: string | null; ship_type: number | null } | null,
-): SpeedResolution {
-  if (info == null) {
-    // MMSI prefix can still tell us about aircraft even without an entity row
-    if (looksLikeSarAircraft(mmsi)) return { max_speed_ms: MAX_SPEED_AIRCRAFT_MS, source: "aircraft" }
-    return { max_speed_ms: MAX_SPEED_UNKNOWN_MS, source: "unknown" }
-  }
-
-  if (info.entity_type === "aircraft" || looksLikeSarAircraft(mmsi)) {
-    return { max_speed_ms: MAX_SPEED_AIRCRAFT_MS, source: "aircraft" }
-  }
-  if (info.entity_type === "drone") {
-    return { max_speed_ms: MAX_SPEED_DRONE_MS, source: "drone" }
-  }
-
-  const st = info.ship_type
-  if (st != null) {
-    if (st >= 40 && st <= 49) return { max_speed_ms: MAX_SPEED_HSC_MS, source: "hsc" }
-    if (st >= 50 && st <= 55) return { max_speed_ms: MAX_SPEED_SAR_MS, source: "sar" }
-  }
-
-  return { max_speed_ms: MAX_SPEED_DEFAULT_MS, source: "default" }
-}
-
 // ---------------------------------------------------------------------------
-// Normalise + validate (per row)
+// Normalise + validate
 // ---------------------------------------------------------------------------
 
 function normalizeAndValidate(
   raw: RawPosition,
   prevByMmsi: Map<number, { lat: number; lon: number; t: number }>,
-  speedByMmsi: Map<number, SpeedResolution>,
   bump: (reason: RejectReason) => void,
   anomalies: TeleportEvidence[],
 ): NormalizedRow | null {
   const mmsi = toNum(raw.mmsi ?? raw.MMSI)
+  // Widened range — accept base stations, AtoN, SAR aircraft, beacons.
   if (mmsi == null || !Number.isFinite(mmsi) || mmsi < 1 || mmsi > 999999999) {
     bump("mmsi_invalid")
     return null
@@ -205,6 +158,7 @@ function normalizeAndValidate(
     return null
   }
 
+  // Timestamp: accept unix seconds, unix ms, or ISO string
   let t: number
   const rawT = raw.t ?? raw.timestamp
   if (rawT == null) {
@@ -216,40 +170,40 @@ function normalizeAndValidate(
     t = num > 1e12 ? num / 1000 : num
   }
 
+  // Intra-batch anti-teleportation + dedup
   const prev = prevByMmsi.get(mmsi)
   if (prev) {
     const dist = haversine(prev.lon, prev.lat, lon, lat)
     const dtSec = Math.abs(t - prev.t)
 
+    // Dual-channel duplicate: same MMSI, near-same spot, near-same time.
+    // Drop silently as "duplicate" rather than teleport.
     if (dtSec <= DEDUP_WINDOW_SEC && dist <= DEDUP_DIST_M) {
       bump("duplicate_within_batch")
       return null
     }
 
-    if (dtSec > 0) {
-      const speed = dist / dtSec
-      const { max_speed_ms, source } =
-        speedByMmsi.get(mmsi) ?? resolveMaxSpeed(mmsi, null)
-      if (speed > max_speed_ms) {
-        bump("teleportation")
-        anomalies.push({
-          mmsi,
-          anomaly_type: "teleportation",
-          severity: "warn",
-          details: {
-            prev_lat: prev.lat,
-            prev_lon: prev.lon,
-            prev_t: prev.t,
-            lat, lon, t,
-            dist_m: Math.round(dist),
-            dt_s: Math.round(dtSec * 10) / 10,
-            speed_ms: Math.round(speed * 10) / 10,
-            max_speed_ms,
-            max_speed_source: source,
-          },
-        })
-        return null
-      }
+    // Only flag teleportation when we have real forward motion to compare.
+    if (dtSec > 0 && dist / dtSec > MAX_SPEED_MS) {
+      bump("teleportation")
+      anomalies.push({
+        mmsi,
+        anomaly_type: "teleportation",
+        severity: "warn",
+        details: {
+          prev_lat: prev.lat,
+          prev_lon: prev.lon,
+          prev_t: prev.t,
+          lat,
+          lon,
+          t,
+          dist_m: Math.round(dist),
+          dt_s: Math.round(dtSec * 10) / 10,
+          speed_ms: Math.round((dist / dtSec) * 10) / 10,
+          max_speed_ms: MAX_SPEED_MS,
+        },
+      })
+      return null
     }
   }
 
@@ -266,63 +220,6 @@ function normalizeAndValidate(
     lat, lon, t, sog, cog, hdg,
     vessel_name: vessel_name ? String(vessel_name).trim().replace(/@+$/, "").trim() || null : null,
   }
-}
-
-// ---------------------------------------------------------------------------
-// Pre-batch entity lookup — one SELECT per HTTP call, not per row.
-// ---------------------------------------------------------------------------
-
-async function buildSpeedMap(
-  supabase: ReturnType<typeof createClient>,
-  rawRows: RawPosition[],
-): Promise<Map<number, SpeedResolution>> {
-  const mmsiSet = new Set<string>()
-  for (const r of rawRows) {
-    const n = toNum(r.mmsi ?? r.MMSI)
-    if (n != null && Number.isFinite(n) && n >= 1 && n <= 999999999) {
-      mmsiSet.add(padMmsi(n))
-    }
-  }
-  const mmsiList = Array.from(mmsiSet)
-  const out = new Map<number, SpeedResolution>()
-  if (mmsiList.length === 0) return out
-
-  try {
-    const { data, error } = await supabase
-      .from("entities")
-      .select("entity_type, domain_meta")
-      .in("domain_meta->>mmsi", mmsiList)
-      .limit(mmsiList.length)
-
-    if (error) {
-      console.warn("[ingest-positions] speed-map lookup error (falling back to defaults):", error.message)
-      // Fall through — every MMSI will resolve via `resolveMaxSpeed(mmsi, null)`
-      for (const m of mmsiList) out.set(Number(m), resolveMaxSpeed(Number(m), null))
-      return out
-    }
-
-    const byMmsi = new Map<string, { entity_type: string | null; ship_type: number | null }>()
-    for (const row of (data ?? []) as Array<{ entity_type: string | null; domain_meta: Record<string, unknown> | null }>) {
-      const m = row.domain_meta?.mmsi
-      const st = row.domain_meta?.ship_type
-      if (typeof m === "string") {
-        byMmsi.set(m, {
-          entity_type: row.entity_type ?? null,
-          ship_type: typeof st === "number" ? st : (typeof st === "string" ? Number(st) : null),
-        })
-      }
-    }
-
-    for (const m of mmsiList) {
-      const info = byMmsi.get(m) ?? null
-      out.set(Number(m), resolveMaxSpeed(Number(m), info))
-    }
-  } catch (e) {
-    console.warn("[ingest-positions] speed-map lookup exception:", (e as Error).message)
-    for (const m of mmsiList) out.set(Number(m), resolveMaxSpeed(Number(m), null))
-  }
-
-  return out
 }
 
 // ---------------------------------------------------------------------------
@@ -344,6 +241,7 @@ Deno.serve(async (req: Request) => {
 })
 
 async function handle(req: Request): Promise<Response> {
+  // CORS
   if (req.method === "OPTIONS") {
     return new Response(null, {
       headers: {
@@ -358,6 +256,7 @@ async function handle(req: Request): Promise<Response> {
     return Response.json({ error: "Method not allowed" }, { status: 405 })
   }
 
+  // Auth
   const apiKey = req.headers.get("x-api-key") ?? req.headers.get("apikey")
   const expectedKey = Deno.env.get("INGEST_API_KEY")
   if (expectedKey && apiKey !== expectedKey) {
@@ -383,6 +282,7 @@ async function handle(req: Request): Promise<Response> {
     return Response.json({ error: "No positions in payload" }, { status: 400 })
   }
 
+  // --- Per-reason counters ---
   const reasons: Record<RejectReason, number> = {
     mmsi_invalid: 0,
     invalid_coords: 0,
@@ -393,20 +293,13 @@ async function handle(req: Request): Promise<Response> {
   }
   const bump = (reason: RejectReason) => { reasons[reason]++ }
 
-  const supabase = createClient(
-    Deno.env.get("SUPABASE_URL") ?? "",
-    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
-  )
-
-  // One lookup per batch gives us per-type speed thresholds.
-  const speedByMmsi = await buildSpeedMap(supabase, rawRows)
-
+  // --- Normalise + validate all rows ---
   const prevByMmsi = new Map<number, { lat: number; lon: number; t: number }>()
   const valid: NormalizedRow[] = []
   const anomalies: TeleportEvidence[] = []
 
   for (const raw of rawRows) {
-    const row = normalizeAndValidate(raw, prevByMmsi, speedByMmsi, bump, anomalies)
+    const row = normalizeAndValidate(raw, prevByMmsi, bump, anomalies)
     if (row) valid.push(row)
   }
 
@@ -414,6 +307,14 @@ async function handle(req: Request): Promise<Response> {
     reasons.mmsi_invalid + reasons.invalid_coords + reasons.out_of_bounds +
     reasons.null_island + reasons.teleportation + reasons.duplicate_within_batch
 
+  const supabase = createClient(
+    Deno.env.get("SUPABASE_URL") ?? "",
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
+  )
+
+  // Best-effort anomaly logging. Teleportation rejects are evidence, not noise —
+  // keep the prev/next pair for later analysis (spoofing, MMSI hijack, GPS glitch).
+  // A failing anomaly log must NEVER break the main ingest path.
   if (anomalies.length > 0) {
     try {
       const { error: anomErr } = await supabase.rpc("write_anomalies_batch", {
@@ -428,6 +329,7 @@ async function handle(req: Request): Promise<Response> {
     }
   }
 
+  // Early exit: nothing valid — still log the batch so rejection rate is visible.
   if (valid.length === 0) {
     const { error: logErr } = await supabase.rpc("ingest_positions_v2", {
       p_rows: [],
@@ -452,11 +354,16 @@ async function handle(req: Request): Promise<Response> {
     })
   }
 
+  // Ensure partition for today and tomorrow (cheap idempotent call).
+  // NOTE: supabase-js rpc() returns a PostgrestBuilder (PromiseLike), NOT a Promise,
+  // so `.catch()` does not exist on it. Must wrap in try/catch instead.
   const today = new Date()
   const tomorrow = new Date(today.getTime() + 86400000)
   try { await supabase.rpc("ensure_partition", { p_date: today.toISOString().slice(0, 10) }) } catch { /* idempotent */ }
   try { await supabase.rpc("ensure_partition", { p_date: tomorrow.toISOString().slice(0, 10) }) } catch { /* idempotent */ }
 
+  // Build RPC rows — pass numeric mmsi (RPC pads internally) but include padded
+  // form for debugging round-trip consistency.
   const rpcRows = valid.map(row => ({
     mmsi: row.mmsi,
     mmsi_str: row.mmsi_str,

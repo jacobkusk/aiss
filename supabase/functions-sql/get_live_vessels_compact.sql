@@ -39,7 +39,7 @@ BEGIN
       WHEN (NOW() - el.updated_at) < INTERVAL '4 hours' THEN 15
       ELSE 5
     END::INT,
-    0::INT,
+    NULLIF((e.domain_meta->>'ship_type')::INT, 0),
     NULL::DOUBLE PRECISION,
     NULL::DOUBLE PRECISION,
     EXTRACT(EPOCH FROM el.updated_at)::BIGINT,

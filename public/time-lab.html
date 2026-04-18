@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>TimeSlider Lab — aiss.network</title>
+<style>
+  body {
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    background: #060D1A;
+    color: #c8dce8;
+    margin: 0;
+    padding: 40px 60px 120px;
+    line-height: 1.5;
+  }
+  h1 { color: #2BA8C8; margin: 0 0 8px 0; font-weight: 500; }
+  h2 { margin: 56px 0 6px 0; font-weight: 500; color: #c8dce8; font-size: 16px; letter-spacing: 0.5px; }
+  h2 .tag { color: #f59e0b; font-size: 11px; margin-left: 10px; letter-spacing: 1px; }
+  .muted { color: #7a94a6; font-size: 12px; line-height: 1.6; max-width: 760px; margin: 0 0 4px 0; }
+  .muted strong { color: #c8dce8; font-weight: 500; }
+  .slider-wrap { margin: 28px 0 0 0; padding: 48px 40px 20px; background: #0f1824; border-radius: 4px; position: relative; }
+  .slider-readout { font-size: 11px; color: #7a94a6; margin-top: 14px; font-variant-numeric: tabular-nums; display: flex; gap: 28px; flex-wrap: wrap; }
+  .slider-readout strong { color: #c8dce8; font-weight: 500; }
+
+  .slider-track {
+    position: relative;
+    height: 40px;
+    background: #1a2938;
+    border-radius: 2px;
+    user-select: none;
+    cursor: default;
+  }
+  .slider-fill {
+    position: absolute;
+    top: 0; bottom: 0;
+    background: rgba(43, 168, 200, 0.12);
+    border-top: 1px solid rgba(43, 168, 200, 0.6);
+    border-bottom: 1px solid rgba(43, 168, 200, 0.6);
+    pointer-events: none;
+  }
+  .slider-handle {
+    position: absolute;
+    top: -6px; bottom: -6px;
+    width: 14px;
+    background: #2BA8C8;
+    border-radius: 2px;
+    cursor: ew-resize;
+    transform: translateX(-7px);
+    box-shadow: 0 0 0 1px #060D1A;
+    touch-action: none;
+  }
+  .slider-handle:hover { background: #6BC4D8; }
+  .slider-handle.dragging { background: #FFEB3B; }
+  .handle-label {
+    position: absolute;
+    bottom: calc(100% + 10px);
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 10px;
+    color: #c8dce8;
+    background: #060D1A;
+    padding: 3px 7px;
+    border-radius: 2px;
+    white-space: nowrap;
+    pointer-events: none;
+    border: 1px solid #1a2938;
+    font-variant-numeric: tabular-nums;
+  }
+  .hint {
+    position: absolute;
+    top: -30px;
+    font-size: 10px;
+    color: #f59e0b;
+    white-space: nowrap;
+    pointer-events: none;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Two-lane */
+  .dual-lane { display: flex; flex-direction: column; gap: 8px; }
+  .slider-track.mini { height: 16px; opacity: 0.55; cursor: pointer; }
+  .viewport-indicator {
+    position: absolute;
+    top: -1px; bottom: -1px;
+    background: rgba(245, 158, 11, 0.1);
+    border-left: 1.5px solid #f59e0b;
+    border-right: 1.5px solid #f59e0b;
+    pointer-events: none;
+  }
+  .zoom-hint { color: #7a94a6; font-size: 10px; margin-top: 6px; font-style: italic; }
+</style>
+</head>
+<body>
+  <h1>TimeSlider Lab</h1>
+  <p class="muted">Tre prototyper. Samme dummy-data (seneste 7 dage). Prøv hver. Vælg én.</p>
+  <p class="muted">Venstre handle = start, højre handle = end. Labels viser tid live mens du trækker.</p>
+
+  <h2>A — Velocity scrubbing<span class="tag">joystick</span></h2>
+  <p class="muted">Tryk et handle, hold nede, og træk. <strong>Afstanden fra hvor du begyndte dragget</strong> bliver til scrubbing-hastighed — ikke position. Lille offset = minutter per sekund. Stort offset = dage per sekund. Når du slipper, stopper tiden. Hold stille ved en afstand fra origin for at holde hastigheden konstant.</p>
+  <div class="slider-wrap">
+    <div class="slider-track" id="slider-a"></div>
+    <div class="slider-readout" id="readout-a"></div>
+  </div>
+
+  <h2>B — Exponential distance<span class="tag">direct</span></h2>
+  <p class="muted">Standard drag, men px→ms er eksponentiel. 20px ≈ sekunder. 100px ≈ minutter. 200px ≈ timer. 300px ≈ dage. 400px ≈ uger. 500px+ ≈ år. Slip når du er i mål.</p>
+  <div class="slider-wrap">
+    <div class="slider-track" id="slider-b"></div>
+    <div class="slider-readout" id="readout-b"></div>
+  </div>
+
+  <h2>C — Semantic zoom, two-lane<span class="tag">devtools</span></h2>
+  <p class="muted">Top = overview (hele historikken). Bund = detail med handles. <strong>Scroll-hjul</strong> over bund zoomer viewport'et. <strong>Træk tom baggrund</strong> i bund for at pan'e. <strong>Træk handles</strong> for at justere selection.</p>
+  <div class="slider-wrap">
+    <div class="dual-lane">
+      <div class="slider-track mini" id="slider-c-mini"></div>
+      <div class="slider-track" id="slider-c-detail"></div>
+    </div>
+    <p class="zoom-hint">Tip: scroll over bund-lane for at zoome. Pinch på trackpad virker også.</p>
+    <div class="slider-readout" id="readout-c"></div>
+  </div>
+
+<script>
+const NOW = Date.now();
+const SEVEN_DAYS = 7 * 24 * 60 * 60 * 1000;
+const FULL_MIN = NOW - SEVEN_DAYS;
+const FULL_MAX = NOW;
+const YEAR = 365 * 24 * 60 * 60 * 1000;
+
+function fmt(t) {
+  const d = new Date(t);
+  const pad = n => String(n).padStart(2,'0');
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+function fmtSpan(ms) {
+  const s = Math.abs(ms) / 1000;
+  if (s < 1) return (s*1000).toFixed(0) + ' ms';
+  if (s < 60) return s.toFixed(1) + ' sec';
+  if (s < 3600) return (s/60).toFixed(1) + ' min';
+  if (s < 86400) return (s/3600).toFixed(2) + ' hours';
+  if (s < 31536000) return (s/86400).toFixed(2) + ' days';
+  return (s/31536000).toFixed(2) + ' years';
+}
+function mkHandle() {
+  const h = document.createElement('div');
+  h.className = 'slider-handle';
+  const label = document.createElement('div');
+  label.className = 'handle-label';
+  h.appendChild(label);
+  return { el: h, label };
+}
+
+// ── A) Velocity scrubbing ────────────────────────────────────────────────
+(function sliderA() {
+  const track = document.getElementById('slider-a');
+  const readout = document.getElementById('readout-a');
+  let s = { start: NOW - 24*3600*1000, end: NOW };
+
+  const fill = document.createElement('div'); fill.className = 'slider-fill'; track.appendChild(fill);
+  const hint = document.createElement('div'); hint.className = 'hint'; track.appendChild(hint);
+  const L = mkHandle(); const R = mkHandle();
+  track.appendChild(L.el); track.appendChild(R.el);
+
+  function render() {
+    L.el.style.left = '0%'; R.el.style.left = '100%';
+    fill.style.left = '0%'; fill.style.width = '100%';
+    L.label.textContent = fmt(s.start);
+    R.label.textContent = fmt(s.end);
+    readout.innerHTML = `<span>Start: <strong>${fmt(s.start)}</strong></span><span>End: <strong>${fmt(s.end)}</strong></span><span>Width: <strong>${fmtSpan(s.end - s.start)}</strong></span>`;
+  }
+
+  function attach(h, isLeft) {
+    h.el.addEventListener('pointerdown', e => {
+      e.preventDefault();
+      h.el.classList.add('dragging');
+      h.el.setPointerCapture(e.pointerId);
+      const x0 = e.clientX;
+      let velocity = 0;
+      let last = performance.now();
+      let raf;
+
+      function tick(now) {
+        const dt = now - last; last = now;
+        if (Math.abs(velocity) > 0.01) {
+          if (isLeft) s.start = Math.max(FULL_MIN - 10*YEAR, Math.min(s.end - 60_000, s.start + velocity * dt));
+          else        s.end   = Math.max(s.start + 60_000, Math.min(FULL_MAX + 10*YEAR, s.end + velocity * dt));
+          render();
+        }
+        raf = requestAnimationFrame(tick);
+      }
+      raf = requestAnimationFrame(tick);
+
+      function onMove(ev) {
+        const dx = ev.clientX - x0;
+        const sign = Math.sign(dx);
+        const mag = Math.abs(dx);
+        // velocity = ms of time per ms of wall-clock
+        // 30px → ~1 sec/sec (realtime scrubbing), 100px → ~60 sec/sec, 300px → years/sec
+        velocity = sign * Math.pow(mag/30, 3);
+        hint.style.left = (ev.clientX - track.getBoundingClientRect().left + 10) + 'px';
+        hint.textContent = dx === 0 ? '' : `${dx > 0 ? '→' : '←'} ${fmtSpan(velocity*1000)} per sec`;
+      }
+      function onUp() {
+        h.el.classList.remove('dragging');
+        hint.textContent = '';
+        cancelAnimationFrame(raf);
+        window.removeEventListener('pointermove', onMove);
+        window.removeEventListener('pointerup', onUp);
+      }
+      window.addEventListener('pointermove', onMove);
+      window.addEventListener('pointerup', onUp);
+    });
+  }
+  attach(L, true); attach(R, false);
+  render();
+})();
+
+// ── B) Exponential distance ──────────────────────────────────────────────
+(function sliderB() {
+  const track = document.getElementById('slider-b');
+  const readout = document.getElementById('readout-b');
+  let s = { start: NOW - 24*3600*1000, end: NOW };
+
+  const fill = document.createElement('div'); fill.className = 'slider-fill'; track.appendChild(fill);
+  const hint = document.createElement('div'); hint.className = 'hint'; track.appendChild(hint);
+  const L = mkHandle(); const R = mkHandle();
+  track.appendChild(L.el); track.appendChild(R.el);
+
+  function render() {
+    L.el.style.left = '0%'; R.el.style.left = '100%';
+    fill.style.left = '0%'; fill.style.width = '100%';
+    L.label.textContent = fmt(s.start);
+    R.label.textContent = fmt(s.end);
+    readout.innerHTML = `<span>Start: <strong>${fmt(s.start)}</strong></span><span>End: <strong>${fmt(s.end)}</strong></span><span>Width: <strong>${fmtSpan(s.end - s.start)}</strong></span>`;
+  }
+  // 2x time every 20 pixels — px 20 → 1 sec, 40 → 2 sec, 100 → 32 sec, 200 → ~17 min,
+  // 300 → ~9h, 400 → ~11 days, 500 → ~1 year, 600 → ~30 years
+  function pxToMs(dx) {
+    return Math.sign(dx) * (Math.pow(2, Math.abs(dx)/20) - 1) * 1000;
+  }
+
+  function attach(h, isLeft) {
+    h.el.addEventListener('pointerdown', e => {
+      e.preventDefault();
+      h.el.classList.add('dragging');
+      h.el.setPointerCapture(e.pointerId);
+      const x0 = e.clientX;
+      const t0 = isLeft ? s.start : s.end;
+
+      function onMove(ev) {
+        const dx = ev.clientX - x0;
+        const delta = pxToMs(dx);
+        const nt = t0 + delta;
+        if (isLeft) s.start = Math.max(FULL_MIN - 10*YEAR, Math.min(s.end - 60_000, nt));
+        else        s.end   = Math.max(s.start + 60_000, Math.min(FULL_MAX + 10*YEAR, nt));
+        render();
+        hint.style.left = (ev.clientX - track.getBoundingClientRect().left + 10) + 'px';
+        hint.textContent = dx === 0 ? '' : `${delta > 0 ? '+' : '−'}${fmtSpan(delta)} (${dx > 0 ? '+' : ''}${dx}px)`;
+      }
+      function onUp() {
+        h.el.classList.remove('dragging');
+        hint.textContent = '';
+        window.removeEventListener('pointermove', onMove);
+        window.removeEventListener('pointerup', onUp);
+      }
+      window.addEventListener('pointermove', onMove);
+      window.addEventListener('pointerup', onUp);
+    });
+  }
+  attach(L, true); attach(R, false);
+  render();
+})();
+
+// ── C) Semantic zoom two-lane ────────────────────────────────────────────
+(function sliderC() {
+  const mini = document.getElementById('slider-c-mini');
+  const detail = document.getElementById('slider-c-detail');
+  const readout = document.getElementById('readout-c');
+
+  // Full extent — what mini lane shows
+  const dataMin = FULL_MIN - YEAR;
+  const dataMax = FULL_MAX;
+  // Viewport (what detail lane shows)
+  let view = { min: FULL_MIN, max: FULL_MAX };
+  // Selection (handles in detail lane)
+  let sel = { start: NOW - 24*3600*1000, end: NOW };
+
+  const miniView = document.createElement('div'); miniView.className = 'viewport-indicator'; mini.appendChild(miniView);
+  const miniSel  = document.createElement('div'); miniSel.className = 'slider-fill'; mini.appendChild(miniSel);
+
+  const detailFill = document.createElement('div'); detailFill.className = 'slider-fill'; detail.appendChild(detailFill);
+  const L = mkHandle(); const R = mkHandle();
+  detail.appendChild(L.el); detail.appendChild(R.el);
+
+  function pctIn(t, mn, mx) { return ((t - mn) / (mx - mn)) * 100; }
+
+  function render() {
+    miniView.style.left = pctIn(view.min, dataMin, dataMax) + '%';
+    miniView.style.width = (pctIn(view.max, dataMin, dataMax) - pctIn(view.min, dataMin, dataMax)) + '%';
+    miniSel.style.left = pctIn(sel.start, dataMin, dataMax) + '%';
+    miniSel.style.width = Math.max(0.2, pctIn(sel.end, dataMin, dataMax) - pctIn(sel.start, dataMin, dataMax)) + '%';
+
+    const lP = pctIn(sel.start, view.min, view.max);
+    const rP = pctIn(sel.end, view.min, view.max);
+    L.el.style.left = Math.max(-2, Math.min(102, lP)) + '%';
+    R.el.style.left = Math.max(-2, Math.min(102, rP)) + '%';
+    const visL = Math.max(0, lP); const visR = Math.min(100, rP);
+    detailFill.style.left = visL + '%';
+    detailFill.style.width = Math.max(0, visR - visL) + '%';
+    L.label.textContent = fmt(sel.start);
+    R.label.textContent = fmt(sel.end);
+    readout.innerHTML = `
+      <span>Selection: <strong>${fmt(sel.start)} → ${fmt(sel.end)}</strong></span>
+      <span>Sel width: <strong>${fmtSpan(sel.end - sel.start)}</strong></span>
+      <span>Viewport: <strong>${fmtSpan(view.max - view.min)}</strong></span>
+    `;
+  }
+
+  detail.addEventListener('wheel', e => {
+    e.preventDefault();
+    const r = detail.getBoundingClientRect();
+    const relX = (e.clientX - r.left) / r.width;
+    const tAt = view.min + relX * (view.max - view.min);
+    const zoom = e.deltaY > 0 ? 1.25 : 1/1.25;
+    const span = Math.max(60_000, (view.max - view.min) * zoom);
+    view.min = tAt - relX * span;
+    view.max = tAt + (1 - relX) * span;
+    render();
+  }, { passive: false });
+
+  function attach(h, isLeft) {
+    h.el.addEventListener('pointerdown', e => {
+      e.preventDefault(); e.stopPropagation();
+      h.el.classList.add('dragging');
+      h.el.setPointerCapture(e.pointerId);
+      const r = detail.getBoundingClientRect();
+      function onMove(ev) {
+        const relX = Math.max(0, Math.min(1, (ev.clientX - r.left) / r.width));
+        const t = view.min + relX * (view.max - view.min);
+        if (isLeft) sel.start = Math.min(sel.end - 60_000, t);
+        else        sel.end = Math.max(sel.start + 60_000, t);
+        render();
+      }
+      function onUp() {
+        h.el.classList.remove('dragging');
+        window.removeEventListener('pointermove', onMove);
+        window.removeEventListener('pointerup', onUp);
+      }
+      window.addEventListener('pointermove', onMove);
+      window.addEventListener('pointerup', onUp);
+    });
+  }
+
+  // Pan: drag empty background
+  detail.addEventListener('pointerdown', e => {
+    if (e.target.classList.contains('slider-handle') || e.target.classList.contains('handle-label')) return;
+    const x0 = e.clientX;
+    const v0 = { ...view };
+    const r = detail.getBoundingClientRect();
+    const msPerPx = (view.max - view.min) / r.width;
+    detail.style.cursor = 'grabbing';
+    function onMove(ev) {
+      const dx = ev.clientX - x0;
+      view.min = v0.min - dx * msPerPx;
+      view.max = v0.max - dx * msPerPx;
+      render();
+    }
+    function onUp() {
+      detail.style.cursor = '';
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+    }
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+  });
+
+  // Click mini lane = center viewport there
+  mini.addEventListener('click', e => {
+    const r = mini.getBoundingClientRect();
+    const relX = (e.clientX - r.left) / r.width;
+    const tAt = dataMin + relX * (dataMax - dataMin);
+    const span = view.max - view.min;
+    view.min = tAt - span/2;
+    view.max = tAt + span/2;
+    render();
+  });
+
+  attach(L, true); attach(R, false);
+  render();
+})();
+</script>
+</body>
+</html>

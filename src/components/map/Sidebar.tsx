@@ -24,6 +24,8 @@ interface SidebarProps {
   onLandChange?: (v: boolean) => void;
   showLabels?: boolean;
   onLabelsChange?: (v: boolean) => void;
+  timelineOpen?: boolean;
+  onTimelineToggle?: () => void;
 }
 
 // SVG ikoner
@@ -70,14 +72,24 @@ export default function Sidebar({
   showEEZ, onEEZChange,
   showLand, onLandChange,
   showLabels, onLabelsChange,
+  timelineOpen = false, onTimelineToggle,
 }: SidebarProps) {
   return (
     <div style={{
       width: 220, flexShrink: 0, height: "100%",
-      background: "rgba(4, 12, 20, 0.92)",
-      borderRight: "1px solid rgba(43, 168, 200, 0.1)",
+      // Glass — matches TimeSlider (bg, border, blur)
+      background: "rgba(12, 17, 30, 0.58)",
+      backdropFilter: "blur(22px) saturate(1.4)",
+      WebkitBackdropFilter: "blur(22px) saturate(1.4)",
+      borderRight: "1px solid rgba(255, 255, 255, 0.10)",
       display: "flex", flexDirection: "column",
+      position: "relative",
     }}>
+      <div aria-hidden style={{
+        position: "absolute", top: 0, right: 0, bottom: 0, width: 1,
+        background: "linear-gradient(180deg, transparent, rgba(255,255,255,0.08), transparent)",
+        pointerEvents: "none",
+      }} />
       {/* Logo */}
       <div style={{ padding: "14px 16px 10px", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
         <div style={{ fontSize: 13, fontWeight: 700, letterSpacing: "1px", color: "#2ba8c8" }}>AISS</div>
@@ -88,6 +100,40 @@ export default function Sidebar({
       <div style={{ padding: "10px 12px", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
         {onSearchSelect && <VesselSearch onSelect={onSearchSelect} />}
       </div>
+
+      {/* Timeline toggle */}
+      {onTimelineToggle && (
+        <div style={{ padding: "10px 12px", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+          <button
+            onClick={onTimelineToggle}
+            aria-pressed={timelineOpen}
+            aria-label={timelineOpen ? "Hide Timeline" : "Show Timeline"}
+            style={{
+              display: "flex", alignItems: "center", gap: 8,
+              width: "100%", padding: "8px 10px",
+              background: timelineOpen ? "rgba(110, 231, 231, 0.14)" : "rgba(255,255,255,0.04)",
+              border: `1px solid ${timelineOpen ? "rgba(110, 231, 231, 0.45)" : "rgba(255,255,255,0.10)"}`,
+              borderRadius: 7,
+              color: timelineOpen ? "#6EE7E7" : "#cfe3ea",
+              fontSize: 11, fontFamily: "monospace",
+              letterSpacing: "0.06em", fontWeight: 600,
+              cursor: "pointer", transition: "all 160ms",
+              textAlign: "left",
+            }}
+          >
+            <span style={{ opacity: timelineOpen ? 1 : 0.8 }}>⏱</span>
+            <span>Timeline</span>
+            <span style={{
+              marginLeft: "auto",
+              fontSize: 9, color: timelineOpen ? "#6EE7E7" : "#5a7a8a",
+              padding: "1px 6px", borderRadius: 999,
+              background: timelineOpen ? "rgba(110, 231, 231, 0.18)" : "rgba(255,255,255,0.04)",
+              border: `1px solid ${timelineOpen ? "rgba(110, 231, 231, 0.35)" : "rgba(255,255,255,0.08)"}`,
+              letterSpacing: "0.05em",
+            }}>{timelineOpen ? "ON" : "OFF"}</span>
+          </button>
+        </div>
+      )}
 
       {/* Visning */}
       <div style={{ padding: "10px 12px", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>

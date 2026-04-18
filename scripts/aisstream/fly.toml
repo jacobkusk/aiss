@@ -1,0 +1,31 @@
+# Fly.io config for aisstream collector.
+# Deploy:
+#   fly launch --name aiss-aisstream --no-deploy
+#   fly secrets set AISSTREAM_API_KEY=... SUPABASE_ANON_KEY=eyJ... INGEST_API_KEY=...
+#   fly deploy
+#
+# Single-instance worker — NOT a web service. No HTTP port exposed.
+
+app = "aiss-aisstream"
+primary_region = "arn"   # Stockholm — closest to Øresund
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  # Non-secret defaults (secrets set via `fly secrets set`):
+  SUPABASE_URL         = "https://grugesypzsebqcxcdseu.supabase.co"
+  AISSTREAM_BBOX       = "[[55.3,12.2],[56.2,13.3]]"   # Øresund
+  DOWNSAMPLE_SECONDS   = "15"
+  FLUSH_INTERVAL       = "2.0"
+  MAX_BUFFER           = "1000"
+  LOG_LEVEL            = "INFO"
+
+# No [[services]] block — this is a background worker.
+# `fly scale count 1` is sufficient; we intentionally do NOT run multiple
+# instances (would cause duplicate ingest under the same x-source tag).
+
+[[vm]]
+  cpu_kind = "shared"
+  cpus     = 1
+  memory_mb = 256

@@ -1,0 +1,682 @@
+<!doctype html>
+<html lang="da">
+<head>
+<meta charset="utf-8">
+<title>aiss · time v2 mockup</title>
+<style>
+  :root {
+    --bg: #060D1A;
+    --bg-2: #0B1628;
+    --bg-3: #101E35;
+    --line: #1A2C48;
+    --text: #E6EEF7;
+    --muted: #6B7F99;
+    --dim: #8FA0B8;
+    --aqua: #2BA8C8;
+    --aqua-dim: #1A6A80;
+    --accent-warn: #F59E0B;
+    --good: #00E676;
+    --bad: #FF5252;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace;
+    font-size: 13px;
+    min-height: 100vh;
+  }
+  .page {
+    max-width: 760px;
+    margin: 0 auto;
+    padding: 32px 24px 96px;
+  }
+  h1 {
+    font-size: 18px;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    margin: 0 0 8px;
+  }
+  .sub {
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.6;
+    margin: 0 0 32px;
+  }
+  .sub code {
+    background: var(--bg-2);
+    padding: 1px 6px;
+    border-radius: 3px;
+    color: var(--dim);
+  }
+
+  /* The "sidebar card" */
+  .card {
+    background: var(--bg-2);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 16px;
+    width: 380px;
+    margin: 0 auto;
+  }
+  .card + .card { margin-top: 24px; }
+
+  /* Mode switch */
+  .mode {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0;
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    overflow: hidden;
+    margin-bottom: 20px;
+  }
+  .mode button {
+    background: transparent;
+    border: 0;
+    color: var(--dim);
+    padding: 10px 8px;
+    font-family: inherit;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: background 120ms, color 120ms;
+  }
+  .mode button.active {
+    background: var(--bg-3);
+    color: var(--text);
+  }
+  .mode button:first-child { border-right: 1px solid var(--line); }
+
+  /* Sections */
+  .section-label {
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin: 0 0 8px;
+  }
+  .section + .section { margin-top: 18px; }
+
+  /* Preset chips */
+  .chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-bottom: 10px;
+  }
+  .chip {
+    background: transparent;
+    border: 1px solid var(--line);
+    color: var(--dim);
+    padding: 5px 9px;
+    border-radius: 3px;
+    font-family: inherit;
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 120ms;
+  }
+  .chip:hover { border-color: var(--aqua-dim); color: var(--text); }
+  .chip.active {
+    border-color: var(--aqua);
+    color: var(--aqua);
+    background: rgba(43, 168, 200, 0.08);
+  }
+
+  /* Datetime inputs */
+  .range-inputs {
+    display: grid;
+    grid-template-columns: 1fr 1fr auto;
+    gap: 6px;
+    align-items: center;
+  }
+  .range-inputs input[type="text"] {
+    background: var(--bg);
+    border: 1px solid var(--line);
+    color: var(--text);
+    padding: 6px 8px;
+    border-radius: 3px;
+    font-family: inherit;
+    font-size: 11px;
+    width: 100%;
+  }
+  .range-inputs input:focus {
+    outline: none;
+    border-color: var(--aqua);
+  }
+  .btn-apply {
+    background: var(--aqua);
+    border: 0;
+    color: #000;
+    padding: 6px 12px;
+    border-radius: 3px;
+    font-family: inherit;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    letter-spacing: 0.04em;
+  }
+  .btn-apply:hover { background: #3FC8E8; }
+  .hint {
+    color: var(--muted);
+    font-size: 10px;
+    margin-top: 4px;
+    letter-spacing: 0.02em;
+  }
+
+  /* Density strip */
+  .density-wrap {
+    position: relative;
+    height: 56px;
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    overflow: hidden;
+    cursor: crosshair;
+  }
+  .density-bars {
+    display: flex;
+    align-items: flex-end;
+    height: 100%;
+    padding: 6px 4px 4px;
+    gap: 1px;
+  }
+  .bar {
+    flex: 1;
+    background: var(--aqua-dim);
+    min-height: 1px;
+    border-radius: 1px 1px 0 0;
+    transition: background 120ms;
+  }
+  .bar.hover { background: var(--aqua); }
+  .playhead {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 1px;
+    background: var(--accent-warn);
+    box-shadow: 0 0 4px var(--accent-warn);
+    pointer-events: none;
+    transition: left 40ms linear;
+  }
+  .playhead::before {
+    content: '';
+    position: absolute;
+    top: -2px;
+    left: -3px;
+    width: 7px;
+    height: 7px;
+    background: var(--accent-warn);
+    border-radius: 50%;
+  }
+  .density-labels {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 4px;
+    font-size: 10px;
+    color: var(--muted);
+  }
+  .density-center {
+    text-align: center;
+    flex: 1;
+  }
+
+  /* Playhead controls */
+  .playback {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 10px;
+  }
+  .play-btn {
+    background: var(--bg);
+    border: 1px solid var(--line);
+    color: var(--text);
+    width: 30px;
+    height: 28px;
+    border-radius: 3px;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 11px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .play-btn:hover { border-color: var(--aqua); }
+  .play-btn.primary {
+    background: var(--aqua);
+    color: #000;
+    border-color: var(--aqua);
+    width: 36px;
+  }
+  .play-btn.primary:hover { background: #3FC8E8; }
+  .speeds {
+    display: flex;
+    gap: 2px;
+    margin-left: auto;
+  }
+  .speeds .chip {
+    padding: 4px 7px;
+    font-size: 10px;
+  }
+
+  /* Current moment readout */
+  .moment {
+    margin-top: 10px;
+    padding: 8px 10px;
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    font-size: 11px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .moment-label { color: var(--muted); }
+  .moment-value { color: var(--accent-warn); letter-spacing: 0.04em; }
+
+  /* Mode context note */
+  .mode-note {
+    background: var(--bg);
+    border-left: 2px solid var(--aqua);
+    padding: 8px 10px;
+    font-size: 11px;
+    color: var(--dim);
+    margin-top: 14px;
+    line-height: 1.5;
+  }
+  .mode-note strong { color: var(--text); font-weight: 500; }
+
+  /* Tip footer */
+  .tips {
+    margin-top: 40px;
+    color: var(--muted);
+    font-size: 11px;
+    line-height: 1.7;
+    max-width: 540px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+  .tips h3 {
+    font-size: 12px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text);
+    margin: 24px 0 8px;
+  }
+  .tips kbd {
+    background: var(--bg-2);
+    border: 1px solid var(--line);
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-family: inherit;
+    font-size: 10px;
+  }
+</style>
+</head>
+<body>
+<div class="page">
+  <h1>aiss · time interface v2</h1>
+  <p class="sub">
+    Mockup af ny sidebar-tidssektion. Ingen slider til interval-valg.
+    Presets + tekst vælger vinduet; playhead + density lever inde i vinduet.
+    Mode-switch styrer hvad density-strippen måler.
+  </p>
+
+  <div class="card" id="card">
+    <!-- Mode switch -->
+    <div class="mode">
+      <button id="mode-area" class="active">Område-trafik</button>
+      <button id="mode-vessel">Valgt båd</button>
+    </div>
+
+    <!-- Interval -->
+    <div class="section">
+      <p class="section-label">Interval</p>
+      <div class="chips" id="chips">
+        <button class="chip" data-preset="hour">Sidste time</button>
+        <button class="chip" data-preset="today">I dag</button>
+        <button class="chip active" data-preset="yesterday">I går</button>
+        <button class="chip" data-preset="24h">Seneste 24t</button>
+        <button class="chip" data-preset="7d">Seneste 7d</button>
+        <button class="chip" data-preset="30d">Seneste 30d</button>
+        <button class="chip" data-preset="1y">Seneste år</button>
+        <button class="chip" data-preset="all">Alt</button>
+      </div>
+      <div class="range-inputs">
+        <input type="text" id="from" placeholder="fra — fx 'i går 12:00'" value="2026-04-16 00:00">
+        <input type="text" id="to" placeholder="til — fx 'i dag 08:00'" value="2026-04-16 23:59">
+        <button class="btn-apply" id="apply">Apply</button>
+      </div>
+      <p class="hint">Felterne forstår naturligt sprog: "i går 12:00", "april 2025", "14 dage siden".</p>
+    </div>
+
+    <!-- Density / playhead -->
+    <div class="section">
+      <p class="section-label" id="density-label">Trafik-intensitet (antal aktive skibe)</p>
+      <div class="density-wrap" id="densityWrap">
+        <div class="density-bars" id="bars"></div>
+        <div class="playhead" id="playhead" style="left: 30%"></div>
+      </div>
+      <div class="density-labels">
+        <span id="labelStart">00:00</span>
+        <span class="density-center" id="labelNow">12:00</span>
+        <span id="labelEnd">23:59</span>
+      </div>
+      <div class="playback">
+        <button class="play-btn" id="backBtn" title="10s tilbage">◀◀</button>
+        <button class="play-btn primary" id="playBtn" title="Afspil/pause">▶</button>
+        <button class="play-btn" id="fwdBtn" title="10s frem">▶▶</button>
+        <div class="speeds" id="speeds">
+          <button class="chip" data-speed="1">1×</button>
+          <button class="chip active" data-speed="10">10×</button>
+          <button class="chip" data-speed="100">100×</button>
+          <button class="chip" data-speed="1000">1000×</button>
+        </div>
+      </div>
+      <div class="moment">
+        <span class="moment-label">Nu på playhead</span>
+        <span class="moment-value" id="momentValue">2026-04-16 07:12:00</span>
+      </div>
+      <div class="mode-note" id="modeNote">
+        <strong>Område-trafik</strong> — Alle skibe der var inden for kortets viewport i intervallet.
+        Playhead afspiller bevægelserne. Klik en båd på kortet for at skifte til "Valgt båd".
+      </div>
+    </div>
+  </div>
+
+  <div class="tips">
+    <h3>Prøv det</h3>
+    <p>
+      · Klik en <strong>preset-chip</strong> — datoer opdateres, density regenereres.<br>
+      · Klik <strong>i density-strippen</strong> for at hoppe playhead dertil.<br>
+      · Tryk <strong>▶</strong> for at afspille. Vælg hastighed med 1× / 10× / 100× / 1000×.<br>
+      · Skift <strong>mode</strong> — density-kurvens betydning ændres (trafik-volumen vs. positions-tæthed) plus bund-noten.<br>
+      · Brug <kbd>Space</kbd> for play/pause, <kbd>←</kbd> / <kbd>→</kbd> for 10s hop.
+    </p>
+    <h3>Hvad mockup'en viser</h3>
+    <p>
+      Intervallet vælges én gang (hurtigt, diskret). Playhead bevæger sig kun *inde i* det valgte interval, så ingen eksponential-magi er nødvendig — lineær scrubbing er præcis nok, fordi vinduet allerede er "den rigtige størrelse". Density-strippen er informativ: peaks siger "der sker noget her". Klik hopper playhead dertil.
+    </p>
+    <p>
+      I produktion tegner <strong>Område-trafik</strong>-mode alle skibe som dots der bevæger sig med playhead. <strong>Valgt båd</strong>-mode tegner hele ruten statisk og bevæger en highlight-cursor langs den; klik på et waypoint på kortet snapper playhead.
+    </p>
+  </div>
+</div>
+
+<script>
+  // ---------- State ----------
+  const state = {
+    mode: 'area',              // 'area' | 'vessel'
+    fromMs: null,
+    toMs: null,
+    playheadMs: null,
+    playing: false,
+    speed: 10,
+    lastFrame: 0,
+  };
+
+  // ---------- Elements ----------
+  const $chips = document.getElementById('chips');
+  const $from = document.getElementById('from');
+  const $to = document.getElementById('to');
+  const $apply = document.getElementById('apply');
+  const $bars = document.getElementById('bars');
+  const $densityWrap = document.getElementById('densityWrap');
+  const $playhead = document.getElementById('playhead');
+  const $labelStart = document.getElementById('labelStart');
+  const $labelEnd = document.getElementById('labelEnd');
+  const $labelNow = document.getElementById('labelNow');
+  const $moment = document.getElementById('momentValue');
+  const $playBtn = document.getElementById('playBtn');
+  const $backBtn = document.getElementById('backBtn');
+  const $fwdBtn = document.getElementById('fwdBtn');
+  const $speeds = document.getElementById('speeds');
+  const $modeArea = document.getElementById('mode-area');
+  const $modeVessel = document.getElementById('mode-vessel');
+  const $densityLabel = document.getElementById('density-label');
+  const $modeNote = document.getElementById('modeNote');
+
+  // ---------- Helpers ----------
+  function pad(n) { return String(n).padStart(2, '0'); }
+  function fmtDateTime(ms) {
+    const d = new Date(ms);
+    return d.getUTCFullYear() + '-' + pad(d.getUTCMonth()+1) + '-' + pad(d.getUTCDate())
+      + ' ' + pad(d.getUTCHours()) + ':' + pad(d.getUTCMinutes()) + ':' + pad(d.getUTCSeconds());
+  }
+  function fmtShort(ms, spanMs) {
+    const d = new Date(ms);
+    if (spanMs < 48 * 3600_000) {
+      return pad(d.getUTCHours()) + ':' + pad(d.getUTCMinutes());
+    }
+    if (spanMs < 60 * 24 * 3600_000) {
+      return pad(d.getUTCMonth()+1) + '-' + pad(d.getUTCDate()) + ' ' + pad(d.getUTCHours()) + ':' + pad(d.getUTCMinutes());
+    }
+    return d.getUTCFullYear() + '-' + pad(d.getUTCMonth()+1) + '-' + pad(d.getUTCDate());
+  }
+  function parseNaturalInput(str) {
+    // Minimal parser — enough to feel real. In prod: chrono-node.
+    if (!str) return null;
+    const s = str.trim().toLowerCase();
+    const now = Date.now();
+    const day = 86400_000;
+    if (s === 'nu' || s === 'now') return now;
+    if (s === 'i dag' || s === 'today') return new Date(new Date().setUTCHours(0,0,0,0)).getTime();
+    if (s === 'i går' || s === 'yesterday') return new Date(new Date().setUTCHours(0,0,0,0)).getTime() - day;
+    const m = s.match(/^(\d{4})-(\d{2})-(\d{2})(?:[ t](\d{1,2}):(\d{2})(?::(\d{2}))?)?$/);
+    if (m) return Date.UTC(+m[1], +m[2]-1, +m[3], +(m[4]||0), +(m[5]||0), +(m[6]||0));
+    const rel = s.match(/^(\d+)\s*(dage|dag|days|day|timer|time|hours|hour)\s*siden$/);
+    if (rel) {
+      const n = +rel[1];
+      const unit = rel[2].startsWith('d') ? day : 3600_000;
+      return now - n * unit;
+    }
+    return null;
+  }
+  function setPreset(preset) {
+    const now = Date.now();
+    const startOfToday = new Date(new Date().setUTCHours(0,0,0,0)).getTime();
+    let from, to;
+    switch (preset) {
+      case 'hour':      from = now - 3600_000; to = now; break;
+      case 'today':     from = startOfToday; to = now; break;
+      case 'yesterday': from = startOfToday - 86400_000; to = startOfToday - 1; break;
+      case '24h':       from = now - 86400_000; to = now; break;
+      case '7d':        from = now - 7 * 86400_000; to = now; break;
+      case '30d':       from = now - 30 * 86400_000; to = now; break;
+      case '1y':        from = now - 365 * 86400_000; to = now; break;
+      case 'all':       from = Date.UTC(2022, 0, 1); to = now; break;
+    }
+    state.fromMs = from;
+    state.toMs = to;
+    state.playheadMs = from + (to - from) * 0.3;
+    $from.value = fmtDateTime(from);
+    $to.value = fmtDateTime(to);
+    regenerate();
+  }
+
+  // ---------- Density generator ----------
+  function seededRandom(seed) {
+    let s = seed;
+    return () => {
+      s = (s * 9301 + 49297) % 233280;
+      return s / 233280;
+    };
+  }
+  function buildDensity(fromMs, toMs, mode) {
+    // ~80 bars.  Seed by interval start so regenerations are stable per window.
+    const N = 80;
+    const rand = seededRandom(Math.floor(fromMs / 1000));
+    const span = toMs - fromMs;
+    const bars = [];
+    for (let i = 0; i < N; i++) {
+      const t = i / (N - 1);
+      if (mode === 'area') {
+        // Traffic: higher in middle (rush hour), noise on top
+        let v = 0.3 + 0.7 * Math.exp(-Math.pow((t - 0.45) / 0.25, 2));
+        v *= (0.7 + 0.6 * rand());
+        // a couple of secondary humps
+        v += 0.35 * Math.exp(-Math.pow((t - 0.75) / 0.08, 2));
+        bars.push(Math.min(1, v));
+      } else {
+        // Vessel: position density — clusters + empty stretches
+        let v = 0.15 + 0.3 * rand();
+        // dense region 1
+        v += 0.9 * Math.exp(-Math.pow((t - 0.12) / 0.06, 2));
+        // empty gap
+        if (t > 0.25 && t < 0.42) v *= 0.12;
+        // dense region 2
+        v += 0.8 * Math.exp(-Math.pow((t - 0.58) / 0.05, 2));
+        // dense region 3
+        v += 0.6 * Math.exp(-Math.pow((t - 0.85) / 0.09, 2));
+        bars.push(Math.min(1, v));
+      }
+    }
+    return bars;
+  }
+  function renderBars(bars) {
+    $bars.innerHTML = '';
+    for (const v of bars) {
+      const b = document.createElement('div');
+      b.className = 'bar';
+      b.style.height = (v * 100) + '%';
+      $bars.appendChild(b);
+    }
+  }
+
+  // ---------- Render ----------
+  function regenerate() {
+    const bars = buildDensity(state.fromMs, state.toMs, state.mode);
+    renderBars(bars);
+    updatePlayhead();
+    const span = state.toMs - state.fromMs;
+    $labelStart.textContent = fmtShort(state.fromMs, span);
+    $labelEnd.textContent = fmtShort(state.toMs, span);
+    $labelNow.textContent = fmtShort(state.playheadMs, span);
+  }
+  function updatePlayhead() {
+    const span = state.toMs - state.fromMs;
+    const t = Math.max(0, Math.min(1, (state.playheadMs - state.fromMs) / span));
+    $playhead.style.left = (t * 100) + '%';
+    $moment.textContent = fmtDateTime(state.playheadMs);
+    $labelNow.textContent = fmtShort(state.playheadMs, span);
+  }
+
+  // ---------- Chips ----------
+  $chips.addEventListener('click', (e) => {
+    const chip = e.target.closest('.chip');
+    if (!chip) return;
+    document.querySelectorAll('#chips .chip').forEach(c => c.classList.remove('active'));
+    chip.classList.add('active');
+    setPreset(chip.dataset.preset);
+  });
+
+  // ---------- Apply ----------
+  $apply.addEventListener('click', () => {
+    const from = parseNaturalInput($from.value);
+    const to = parseNaturalInput($to.value);
+    if (from && to && to > from) {
+      state.fromMs = from;
+      state.toMs = to;
+      state.playheadMs = from;
+      document.querySelectorAll('#chips .chip').forEach(c => c.classList.remove('active'));
+      regenerate();
+    } else {
+      $from.style.borderColor = '#FF5252';
+      $to.style.borderColor = '#FF5252';
+      setTimeout(() => { $from.style.borderColor = ''; $to.style.borderColor = ''; }, 900);
+    }
+  });
+
+  // ---------- Density click ----------
+  $densityWrap.addEventListener('click', (e) => {
+    const r = $densityWrap.getBoundingClientRect();
+    const t = (e.clientX - r.left) / r.width;
+    state.playheadMs = state.fromMs + t * (state.toMs - state.fromMs);
+    updatePlayhead();
+  });
+
+  // ---------- Playback ----------
+  let rafId = null;
+  function tick(now) {
+    if (!state.lastFrame) state.lastFrame = now;
+    const dt = now - state.lastFrame;
+    state.lastFrame = now;
+    state.playheadMs += dt * state.speed;
+    if (state.playheadMs >= state.toMs) {
+      state.playheadMs = state.toMs;
+      stopPlay();
+    }
+    updatePlayhead();
+    if (state.playing) rafId = requestAnimationFrame(tick);
+  }
+  function startPlay() {
+    if (state.playheadMs >= state.toMs) state.playheadMs = state.fromMs;
+    state.playing = true;
+    state.lastFrame = 0;
+    $playBtn.textContent = '❚❚';
+    rafId = requestAnimationFrame(tick);
+  }
+  function stopPlay() {
+    state.playing = false;
+    $playBtn.textContent = '▶';
+    if (rafId) cancelAnimationFrame(rafId);
+  }
+  $playBtn.addEventListener('click', () => state.playing ? stopPlay() : startPlay());
+  $backBtn.addEventListener('click', () => {
+    state.playheadMs = Math.max(state.fromMs, state.playheadMs - 10_000);
+    updatePlayhead();
+  });
+  $fwdBtn.addEventListener('click', () => {
+    state.playheadMs = Math.min(state.toMs, state.playheadMs + 10_000);
+    updatePlayhead();
+  });
+
+  $speeds.addEventListener('click', (e) => {
+    const chip = e.target.closest('.chip');
+    if (!chip) return;
+    document.querySelectorAll('#speeds .chip').forEach(c => c.classList.remove('active'));
+    chip.classList.add('active');
+    state.speed = +chip.dataset.speed;
+  });
+
+  // ---------- Mode switch ----------
+  function setMode(m) {
+    state.mode = m;
+    if (m === 'area') {
+      $modeArea.classList.add('active');
+      $modeVessel.classList.remove('active');
+      $densityLabel.textContent = 'Trafik-intensitet (antal aktive skibe)';
+      $modeNote.innerHTML = '<strong>Område-trafik</strong> — Alle skibe der var inden for kortets viewport i intervallet. Playhead afspiller bevægelserne. Klik en båd på kortet for at skifte til "Valgt båd".';
+    } else {
+      $modeVessel.classList.add('active');
+      $modeArea.classList.remove('active');
+      $densityLabel.textContent = 'Positions-tæthed (waypoints per minut)';
+      $modeNote.innerHTML = '<strong>Valgt båd</strong> — Ruten tegnes i fuld i intervallet. Playhead bevæger en cursor langs ruten. Klik et waypoint på kortet = snap playhead dertil.';
+    }
+    regenerate();
+  }
+  $modeArea.addEventListener('click', () => setMode('area'));
+  $modeVessel.addEventListener('click', () => setMode('vessel'));
+
+  // ---------- Keyboard ----------
+  window.addEventListener('keydown', (e) => {
+    if (e.target.tagName === 'INPUT') return;
+    if (e.code === 'Space') {
+      e.preventDefault();
+      state.playing ? stopPlay() : startPlay();
+    } else if (e.code === 'ArrowLeft') {
+      $backBtn.click();
+    } else if (e.code === 'ArrowRight') {
+      $fwdBtn.click();
+    }
+  });
+
+  // ---------- Init ----------
+  setPreset('yesterday');
+</script>
+</body>
+</html>

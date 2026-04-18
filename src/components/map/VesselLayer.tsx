@@ -193,6 +193,7 @@ export default function VesselLayer({ onVesselClick, onVesselUpdate, selectedMms
             sog: r.sog,
             cog: r.cog,
             heading: r.heading,
+            ship_type: r.ship_type ?? null,
             freshness: r.freshness ?? 100,
             updated_at: r.updated_epoch_sec ? new Date(r.updated_epoch_sec * 1000).toISOString() : null,
             stale: (r.freshness ?? 100) < 30,

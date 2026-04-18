@@ -1,0 +1,1594 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>aiss · time v6 · glass</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  /* ---------- Design tokens — GLASS ---------- */
+  /* Dark theme (default) */
+  :root, [data-theme="dark"] {
+    /* Surfaces (translucent — let the globe show through) */
+    --glass-bg:        rgba(12, 17, 30, 0.58);
+    --glass-bg-strong: rgba(12, 17, 30, 0.78);
+    --glass-inner:     rgba(255, 255, 255, 0.04);
+    --glass-border:    rgba(255, 255, 255, 0.10);
+    --glass-border-strong: rgba(255, 255, 255, 0.18);
+    --glass-highlight: rgba(255, 255, 255, 0.08);
+    --glass-shadow:    0 28px 80px rgba(0, 0, 0, 0.55), 0 8px 24px rgba(0, 0, 0, 0.35);
+
+    /* Typography colors */
+    --text:  rgba(255, 255, 255, 0.94);
+    --dim:   rgba(255, 255, 255, 0.68);
+    --muted: rgba(255, 255, 255, 0.42);
+    --faint: rgba(255, 255, 255, 0.18);
+
+    /* Accent palette — softer, glass-friendly */
+    --aqua:       #6EE7E7;
+    --aqua-soft:  rgba(110, 231, 231, 0.22);
+    --aqua-bg:    rgba(110, 231, 231, 0.14);
+    --aqua-glow:  rgba(110, 231, 231, 0.35);
+    --violet:     #C4B5FD;
+    --violet-soft:rgba(196, 181, 253, 0.22);
+    --violet-bg:  rgba(196, 181, 253, 0.14);
+    --violet-glow:rgba(196, 181, 253, 0.35);
+    --accent:     #FCD34D;
+    --accent-bg:  rgba(252, 211, 77, 0.18);
+    --accent-soft:rgba(252, 211, 77, 0.26);
+    --good: #6EE7B7;
+
+    /* Legacy vars some parts still reference */
+    --bg:   rgba(255,255,255,0.02);
+    --bg-2: rgba(255,255,255,0.04);
+    --bg-3: rgba(255,255,255,0.06);
+    --bg-4: rgba(255,255,255,0.08);
+    --line:   var(--glass-border);
+    --line-2: var(--glass-border-strong);
+    --aqua-dim:   var(--aqua-soft);
+    --violet-dim: var(--violet-soft);
+    --accent-dim: var(--accent-soft);
+    --ruler: rgba(255,255,255,0.22);
+    --segment-bg:    rgba(255, 255, 255, 0.06);
+    --segment-thumb: rgba(255, 255, 255, 0.12);
+    --tooltip-bg: rgba(12, 17, 30, 0.92);
+    --tooltip-fg: rgba(255, 255, 255, 0.95);
+  }
+  /* Light theme — for white-globe backgrounds */
+  [data-theme="light"] {
+    --glass-bg:        rgba(255, 255, 255, 0.58);
+    --glass-bg-strong: rgba(255, 255, 255, 0.80);
+    --glass-inner:     rgba(14, 23, 38, 0.03);
+    --glass-border:    rgba(14, 23, 38, 0.10);
+    --glass-border-strong: rgba(14, 23, 38, 0.20);
+    --glass-highlight: rgba(255, 255, 255, 0.60);
+    --glass-shadow:    0 28px 80px rgba(30, 50, 90, 0.20), 0 8px 24px rgba(30, 50, 90, 0.12);
+
+    --text:  rgba(14, 23, 38, 0.94);
+    --dim:   rgba(14, 23, 38, 0.66);
+    --muted: rgba(14, 23, 38, 0.42);
+    --faint: rgba(14, 23, 38, 0.14);
+
+    --aqua:       #0E9BA6;
+    --aqua-soft:  rgba(14, 155, 166, 0.20);
+    --aqua-bg:    rgba(14, 155, 166, 0.12);
+    --aqua-glow:  rgba(14, 155, 166, 0.30);
+    --violet:     #6D48E8;
+    --violet-soft:rgba(109, 72, 232, 0.18);
+    --violet-bg:  rgba(109, 72, 232, 0.10);
+    --violet-glow:rgba(109, 72, 232, 0.28);
+    --accent:     #C2410C;
+    --accent-bg:  rgba(194, 65, 12, 0.12);
+    --accent-soft:rgba(194, 65, 12, 0.20);
+    --good: #0D9E60;
+
+    --bg:   rgba(14,23,38,0.02);
+    --bg-2: rgba(14,23,38,0.04);
+    --bg-3: rgba(14,23,38,0.06);
+    --bg-4: rgba(14,23,38,0.08);
+    --line:   var(--glass-border);
+    --line-2: var(--glass-border-strong);
+    --aqua-dim:   var(--aqua-soft);
+    --violet-dim: var(--violet-soft);
+    --accent-dim: var(--accent-soft);
+    --ruler: rgba(14,23,38,0.28);
+    --segment-bg:    rgba(14, 23, 38, 0.04);
+    --segment-thumb: rgba(255, 255, 255, 0.90);
+    --tooltip-bg: rgba(14, 23, 38, 0.94);
+    --tooltip-fg: rgba(255, 255, 255, 0.96);
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    color: var(--text);
+    font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
+    font-size: 13px;
+    user-select: none;
+    min-height: 100vh;
+  }
+  /* Dark: deep space + a large muted Earth limb in the top-right. */
+  [data-theme="dark"] body {
+    background:
+      radial-gradient(1100px 700px at 78% -10%, #1E3664 0%, #0B1430 42%, #030612 72%, #000 100%),
+      radial-gradient(520px 520px at 20% 110%, #3A1A6A 0%, transparent 65%),
+      #000;
+    background-attachment: fixed;
+  }
+  /* Light: airy sky + soft horizon glow. */
+  [data-theme="light"] body {
+    background:
+      radial-gradient(900px 600px at 80% -20%, #C9E3FF 0%, #EAF2FC 45%, #F7FAFF 75%, #FFFFFF 100%),
+      radial-gradient(520px 520px at 15% 115%, #FDE7D9 0%, transparent 70%),
+      #FFFFFF;
+    background-attachment: fixed;
+  }
+  /* Starfield (dark only): two layered pseudo-elements with repeating radial dots. */
+  body::before, body::after {
+    content: ""; position: fixed; inset: 0;
+    pointer-events: none; z-index: 0;
+  }
+  [data-theme="dark"] body::before {
+    background-image:
+      radial-gradient(1px 1px at 12% 18%, #fff 50%, transparent 51%),
+      radial-gradient(1px 1px at 33% 72%, #fff 50%, transparent 51%),
+      radial-gradient(1px 1px at 54% 24%, #fff 50%, transparent 51%),
+      radial-gradient(1px 1px at 71% 81%, #fff 50%, transparent 51%),
+      radial-gradient(1px 1px at 88% 44%, #fff 50%, transparent 51%),
+      radial-gradient(1px 1px at 23% 52%, #fff 50%, transparent 51%),
+      radial-gradient(1.4px 1.4px at 64% 36%, #fff 60%, transparent 61%),
+      radial-gradient(1.4px 1.4px at 82% 66%, #fff 60%, transparent 61%),
+      radial-gradient(1.6px 1.6px at 41% 88%, #fff 60%, transparent 61%);
+    background-size: 600px 600px, 800px 800px, 420px 420px, 720px 720px, 540px 540px, 660px 660px, 900px 900px, 500px 500px, 720px 720px;
+    opacity: 0.55;
+  }
+  /* Earth-glow limb — dark theme only, anchored top-right */
+  [data-theme="dark"] body::after {
+    background:
+      radial-gradient(360px 360px at 85% -4%, rgba(120, 200, 255, 0.22) 0%, rgba(120, 200, 255, 0.08) 40%, transparent 68%),
+      radial-gradient(180px 180px at 88% -2%, rgba(255, 255, 255, 0.10) 0%, transparent 60%);
+    mix-blend-mode: screen;
+  }
+
+  .page {
+    position: relative; z-index: 1;
+    padding: 40px 28px 96px;
+    max-width: 1100px;
+    margin: 0 auto;
+  }
+  h1 {
+    font-family: 'Inter', sans-serif;
+    font-size: 18px; font-weight: 600; letter-spacing: -0.01em;
+    margin: 0 0 6px; color: var(--text);
+  }
+  .sub { color: var(--dim); font-size: 12px; line-height: 1.6; margin: 0 0 24px; max-width: 720px; }
+  kbd {
+    background: var(--glass-inner); border: 1px solid var(--glass-border);
+    padding: 1px 6px; border-radius: 4px;
+    font-family: 'JetBrains Mono', monospace; font-size: 10px;
+  }
+
+  /* The floating glass panel that holds the tool */
+  .card {
+    position: relative;
+    background: var(--glass-bg);
+    backdrop-filter: blur(22px) saturate(1.4);
+    -webkit-backdrop-filter: blur(22px) saturate(1.4);
+    border: 1px solid var(--glass-border);
+    border-radius: 20px;
+    overflow: hidden;
+    box-shadow: var(--glass-shadow);
+  }
+  /* Inner highlight line at the top for that iOS-glass feel */
+  .card::before {
+    content: ""; position: absolute; left: 1px; right: 1px; top: 0; height: 1px;
+    background: linear-gradient(90deg, transparent, var(--glass-highlight), transparent);
+    pointer-events: none;
+  }
+  @supports not (backdrop-filter: blur(1px)) {
+    .card { background: var(--glass-bg-strong); }
+  }
+
+  /* ---------- Top bar: glass segmented control + theme toggle ---------- */
+  .top-bar {
+    padding: 14px 16px;
+    display: flex; align-items: center; gap: 12px;
+    border-bottom: 1px solid var(--glass-border);
+    flex-wrap: wrap;
+  }
+  .segment {
+    position: relative;
+    display: inline-flex;
+    padding: 4px;
+    background: var(--segment-bg);
+    border-radius: 14px;
+    border: 1px solid var(--glass-border);
+  }
+  .segment .seg-btn {
+    position: relative; z-index: 1;
+    background: transparent; border: 0;
+    color: var(--dim); padding: 8px 18px;
+    font-family: 'Inter', sans-serif;
+    font-size: 13px; font-weight: 500;
+    letter-spacing: -0.005em; cursor: pointer;
+    display: inline-flex; align-items: center; gap: 8px;
+    border-radius: 10px;
+    transition: color 180ms;
+  }
+  .segment .seg-btn .glyph { font-size: 15px; opacity: 0.9; }
+  .segment .seg-btn.active { color: var(--text); }
+  body.mode-traffic .segment .seg-btn[data-mode="traffic"].active .glyph { color: var(--aqua); }
+  body.mode-track   .segment .seg-btn[data-mode="track"].active   .glyph { color: var(--violet); }
+  .segment .seg-thumb {
+    position: absolute;
+    top: 4px; bottom: 4px;
+    background: var(--segment-thumb);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border-radius: 10px;
+    border: 1px solid var(--glass-border-strong);
+    transition: left 280ms cubic-bezier(.4,.0,.2,1), width 280ms cubic-bezier(.4,.0,.2,1), box-shadow 220ms;
+    z-index: 0;
+  }
+  body.mode-traffic .segment .seg-thumb { box-shadow: 0 0 0 1px var(--aqua-soft), 0 0 24px -4px var(--aqua-glow); }
+  body.mode-track   .segment .seg-thumb { box-shadow: 0 0 0 1px var(--violet-soft), 0 0 24px -4px var(--violet-glow); }
+
+  /* Theme toggle — matching glass pill */
+  .theme-toggle {
+    margin-left: auto;
+    display: inline-flex; align-items: center;
+    padding: 4px; background: var(--segment-bg);
+    border: 1px solid var(--glass-border); border-radius: 12px;
+  }
+  .theme-toggle button {
+    background: transparent; border: 0;
+    color: var(--muted); cursor: pointer;
+    padding: 6px 10px; border-radius: 8px; font-size: 13px;
+    font-family: 'Inter', sans-serif;
+    display: inline-flex; align-items: center;
+    transition: color 180ms, background 180ms;
+  }
+  .theme-toggle button:hover { color: var(--text); }
+  .theme-toggle button.active {
+    background: var(--segment-thumb); color: var(--text);
+    border: 1px solid var(--glass-border);
+  }
+
+  /* ---------- Body ---------- */
+  .body { padding: 18px 18px 20px; }
+
+  /* ---------- Header readouts ---------- */
+  .hdr {
+    display: flex; align-items: center; gap: 18px;
+    margin-bottom: 16px; flex-wrap: wrap;
+  }
+  .readout { display: flex; align-items: baseline; gap: 8px; }
+  .readout .label {
+    font-family: 'Inter', sans-serif;
+    font-size: 10px; font-weight: 500;
+    letter-spacing: 0.06em; text-transform: uppercase;
+    color: var(--muted);
+  }
+  .readout .value {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px; color: var(--text); letter-spacing: -0.01em;
+  }
+  .readout .value.aqua { color: var(--aqua); }
+  .readout .value.violet { color: var(--violet); }
+  .readout .value.accent { color: var(--accent); }
+  body.mode-traffic .readout .value.layer { color: var(--aqua); }
+  body.mode-track   .readout .value.layer { color: var(--violet); }
+  .sep { flex: 1; }
+
+  /* Glass chip pills */
+  .zoom-chips { display: flex; gap: 4px; flex-wrap: wrap; }
+  .zoom-chips .chip, .scrub-chips .chip {
+    background: var(--glass-inner);
+    border: 1px solid var(--glass-border);
+    color: var(--dim);
+    padding: 5px 11px;
+    border-radius: 999px;
+    font-family: 'Inter', sans-serif;
+    font-size: 11px; font-weight: 500;
+    cursor: pointer;
+    transition: all 180ms;
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+  }
+  .zoom-chips .chip:hover, .scrub-chips .chip:hover {
+    color: var(--text); border-color: var(--glass-border-strong);
+    background: var(--glass-highlight);
+  }
+  body.mode-traffic .zoom-chips .chip.active {
+    border-color: var(--aqua-soft); color: var(--aqua);
+    background: var(--aqua-bg);
+    box-shadow: 0 0 0 1px var(--aqua-soft), 0 0 20px -6px var(--aqua-glow);
+  }
+  body.mode-track   .zoom-chips .chip.active {
+    border-color: var(--violet-soft); color: var(--violet);
+    background: var(--violet-bg);
+    box-shadow: 0 0 0 1px var(--violet-soft), 0 0 20px -6px var(--violet-glow);
+  }
+  .scrub-chips .chip.active {
+    border-color: var(--accent-soft); color: var(--accent);
+    background: var(--accent-bg);
+    box-shadow: 0 0 0 1px var(--accent-soft), 0 0 20px -6px var(--accent);
+  }
+
+  /* ---------- Section headings (TIMESTRIP / FRAME / MOMENT) ---------- */
+  .section-heading {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 10px; letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin: 12px 0 4px;
+  }
+  .section-heading .name { font-weight: 500; }
+  .info {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 14px; height: 14px; border-radius: 50%;
+    background: transparent; border: 1px solid var(--line-2);
+    color: var(--muted); font-size: 9px; font-weight: 500;
+    cursor: help;
+    position: relative;
+    text-transform: none; letter-spacing: 0;
+  }
+  .info:hover { color: var(--text); border-color: var(--text); }
+  .info::after {
+    content: attr(data-tip);
+    position: absolute; left: 50%; top: calc(100% + 6px);
+    transform: translateX(-50%);
+    background: var(--tooltip-bg); color: var(--tooltip-fg);
+    padding: 6px 10px; border-radius: 6px;
+    font-size: 10px; font-weight: 400;
+    letter-spacing: 0.02em; text-transform: none;
+    white-space: nowrap; max-width: none;
+    opacity: 0; pointer-events: none;
+    transition: opacity 120ms;
+    z-index: 100;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.18);
+    font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
+  }
+  .info:hover::after { opacity: 1; }
+  body.mode-traffic .section-heading .name.timestrip,
+  body.mode-traffic .section-heading .name.frame { color: var(--aqua); }
+  body.mode-track   .section-heading .name.timestrip,
+  body.mode-track   .section-heading .name.frame { color: var(--violet); }
+
+  /* ---------- Mini-map (timestrip) ---------- */
+  .mini-wrap {
+    position: relative;
+    height: 40px;
+    background: var(--glass-inner);
+    border: 1px solid var(--glass-border);
+    border-radius: 10px;
+    margin-bottom: 6px;
+    overflow: hidden;
+    cursor: pointer;
+  }
+  .mini-bars {
+    display: flex; align-items: flex-end;
+    height: 100%; padding: 4px 2px;
+    gap: 1px;
+  }
+  .mini-bars .bar {
+    flex: 1; min-height: 1px; border-radius: 1px 1px 0 0; opacity: 0.55;
+  }
+  body.mode-traffic .mini-bars .bar { background: var(--aqua-dim); }
+  body.mode-track   .mini-bars .bar { background: var(--violet-dim); }
+  .mini-viewport {
+    position: absolute;
+    top: 0; bottom: 0;
+    cursor: grab;
+    min-width: 4px;
+  }
+  body.mode-traffic .mini-viewport {
+    background: var(--aqua-bg);
+    border-left: 2px solid var(--aqua); border-right: 2px solid var(--aqua);
+    box-shadow: inset 0 0 20px var(--aqua-bg);
+  }
+  body.mode-track   .mini-viewport {
+    background: var(--violet-bg);
+    border-left: 2px solid var(--violet); border-right: 2px solid var(--violet);
+    box-shadow: inset 0 0 20px var(--violet-bg);
+  }
+  .mini-viewport:active { cursor: grabbing; }
+  .mini-viewport .edge {
+    position: absolute;
+    top: 0; bottom: 0; width: 12px;
+    cursor: ew-resize;
+    background: transparent;
+  }
+  .mini-viewport .edge.left  { left: -6px; }
+  .mini-viewport .edge.right { right: -6px; }
+  .mini-labels {
+    display: flex; justify-content: space-between;
+    color: var(--muted);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    padding: 0 4px; margin-bottom: 12px;
+  }
+
+  /* ---------- Zoom connector (rounded trapezoid from timestrip handles to frame edges) ---------- */
+  .zoom-connector {
+    position: relative;
+    height: 22px;
+    margin-bottom: 0;
+    pointer-events: none;
+  }
+  .zoom-connector svg {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    display: block;
+    overflow: visible;
+  }
+  body.mode-traffic .zoom-connector .zc-fill { fill: var(--aqua); fill-opacity: 0.08; }
+  body.mode-traffic .zoom-connector .zc-edge { stroke: var(--aqua); stroke-opacity: 0.55; }
+  body.mode-track   .zoom-connector .zc-fill { fill: var(--violet); fill-opacity: 0.08; }
+  body.mode-track   .zoom-connector .zc-edge { stroke: var(--violet); stroke-opacity: 0.55; }
+
+  /* ---------- Ruler ---------- */
+  .ruler {
+    position: relative;
+    height: 20px;
+    border: 1px solid var(--glass-border);
+    border-bottom: 0;
+    border-radius: 10px 10px 0 0;
+    background: var(--glass-inner);
+    overflow: hidden;
+  }
+  .ruler .tick {
+    position: absolute;
+    top: 0; bottom: 0;
+    border-left: 1px solid var(--faint);
+  }
+  .ruler .tick span {
+    position: absolute;
+    left: 5px; bottom: 3px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px; color: var(--muted);
+    letter-spacing: 0.02em; white-space: nowrap;
+  }
+
+  /* ---------- Main timeline (Frame) ---------- */
+  .main-wrap {
+    position: relative;
+    background: var(--glass-inner);
+    border-left: 1px solid var(--glass-border);
+    border-right: 1px solid var(--glass-border);
+    border-bottom: 1px solid var(--glass-border);
+    border-radius: 0 0 10px 10px;
+    overflow: hidden;
+  }
+  .main-timeline {
+    position: relative;
+    height: 96px;
+    cursor: crosshair;
+  }
+  .main-bars {
+    position: absolute; inset: 0;
+    display: flex; align-items: flex-end;
+    padding: 8px 2px 4px;
+    gap: 1px;
+  }
+  .main-bars .bar {
+    flex: 1; min-height: 1px; border-radius: 1px 1px 0 0;
+  }
+  body.mode-traffic .main-bars .bar { background: var(--aqua-dim); }
+  body.mode-traffic .main-bars .bar.hot { background: var(--aqua); }
+  body.mode-track   .main-bars .bar { background: var(--violet-dim); }
+  body.mode-track   .main-bars .bar.hot { background: var(--violet); }
+  /* scrubber range: subtle orange highlight around playhead */
+  .scrub-range {
+    position: absolute;
+    top: 0; bottom: 0;
+    background: var(--accent-bg);
+    pointer-events: none;
+    will-change: left, width;
+  }
+  .playhead {
+    position: absolute;
+    top: 0; bottom: 0;
+    width: 1px;
+    background: var(--accent);
+    box-shadow: 0 0 6px var(--accent);
+    pointer-events: none;
+    will-change: left;
+  }
+  .playhead .handle {
+    position: absolute;
+    top: -2px; left: -5px;
+    width: 11px; height: 11px;
+    background: var(--accent);
+    clip-path: polygon(50% 100%, 0% 0%, 100% 0%);
+  }
+
+  /* ---------- MOMENT bar (scrubber with knob — full width) ---------- */
+  .moment-bar {
+    margin-top: 16px;
+    background: var(--glass-inner);
+    border: 1px solid var(--accent-soft);
+    border-radius: 14px;
+    overflow: hidden;
+    box-shadow: 0 0 0 1px rgba(0,0,0,0.01), 0 0 24px -10px var(--accent);
+  }
+  .moment-bar .moment-row {
+    display: flex; align-items: center;
+    padding: 8px 14px;
+    font-size: 11px;
+    font-family: 'Inter', sans-serif;
+  }
+  .moment-bar .moment-label {
+    color: var(--accent);
+    font-size: 10px; font-weight: 600;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    margin-right: 14px;
+  }
+  .moment-bar .moment-count {
+    color: var(--text);
+    font-weight: 500;
+    margin-right: 14px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+  }
+  .moment-bar .moment-count strong { color: var(--accent); font-weight: 600; }
+  .moment-bar .moment-time {
+    color: var(--muted);
+    margin-left: auto;
+    font-size: 10px;
+    letter-spacing: 0.02em;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  /* the actual scrubber track */
+  .moment-scrub {
+    position: relative;
+    height: 30px;
+    background: var(--glass-inner);
+    border-top: 1px solid var(--glass-border);
+    cursor: pointer;
+    overflow: hidden;
+  }
+  .moment-scrub .track {
+    position: absolute;
+    top: 50%; left: 10px; right: 10px;
+    height: 3px;
+    background: var(--accent-soft);
+    border-radius: 2px;
+    transform: translateY(-50%);
+  }
+  .moment-scrub .track-filled {
+    position: absolute;
+    top: 50%; left: 10px;
+    height: 3px;
+    background: var(--accent);
+    border-radius: 2px;
+    transform: translateY(-50%);
+    pointer-events: none;
+    box-shadow: 0 0 10px var(--accent-soft);
+  }
+  .moment-scrub .knob {
+    position: absolute;
+    top: 50%;
+    width: 18px; height: 18px;
+    border-radius: 50%;
+    background: var(--accent);
+    border: 2px solid rgba(255,255,255,0.85);
+    box-shadow: 0 0 0 1px var(--accent-soft), 0 0 14px var(--accent-glow, var(--accent-soft)), 0 2px 8px rgba(0,0,0,0.35);
+    transform: translate(-50%, -50%);
+    cursor: grab;
+    transition: box-shadow 120ms, transform 120ms;
+  }
+  .moment-scrub .knob:hover {
+    box-shadow: 0 0 0 1px var(--accent), 0 0 18px var(--accent), 0 2px 10px rgba(0,0,0,0.4);
+  }
+  .moment-scrub .knob:active { cursor: grabbing; }
+  .moment-scrub .knob-window {
+    position: absolute;
+    top: 50%;
+    height: 20px;
+    background: var(--accent-bg);
+    border: 1px solid var(--accent-soft);
+    border-radius: 12px;
+    transform: translateY(-50%);
+    pointer-events: none;
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+  }
+
+  /* ---------- Controls ---------- */
+  .controls {
+    display: flex; align-items: center; gap: 10px;
+    margin-top: 14px; flex-wrap: wrap;
+  }
+  .controls .row-label {
+    font-size: 9px; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--muted); margin-right: 4px;
+    font-family: 'Inter', sans-serif; font-weight: 500;
+  }
+  .btn {
+    background: var(--glass-inner); border: 1px solid var(--glass-border);
+    color: var(--text); padding: 7px 14px; border-radius: 10px;
+    font-family: 'Inter', sans-serif; font-size: 12px; font-weight: 500;
+    cursor: pointer;
+    display: inline-flex; align-items: center; gap: 6px;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    transition: all 160ms;
+  }
+  .btn:hover {
+    border-color: var(--glass-border-strong);
+    background: var(--glass-highlight);
+    color: var(--text);
+  }
+  .btn.primary {
+    color: #06131A; font-weight: 600; min-width: 44px; justify-content: center;
+    border-color: transparent;
+  }
+  body.mode-traffic .btn.primary {
+    background: var(--aqua); color: #002028;
+    box-shadow: 0 0 0 1px var(--aqua-soft), 0 0 20px -4px var(--aqua-glow);
+  }
+  body.mode-traffic .btn.primary:hover { filter: brightness(1.05); }
+  body.mode-track   .btn.primary {
+    background: var(--violet); color: #1B1036;
+    box-shadow: 0 0 0 1px var(--violet-soft), 0 0 20px -4px var(--violet-glow);
+  }
+  body.mode-track   .btn.primary:hover { filter: brightness(1.05); }
+
+  /* ---------- Studio toggle + panel ---------- */
+  .studio-toggle {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: var(--glass-inner); border: 1px solid var(--glass-border);
+    color: var(--text); padding: 7px 14px; border-radius: 10px;
+    font-family: 'Inter', sans-serif; font-size: 12px; font-weight: 500;
+    cursor: pointer;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    transition: all 160ms;
+  }
+  .studio-toggle:hover {
+    border-color: var(--glass-border-strong);
+    background: var(--glass-highlight);
+  }
+  .studio-toggle[aria-expanded="true"] {
+    background: var(--glass-highlight);
+    border-color: var(--glass-border-strong);
+  }
+  body.mode-traffic .studio-toggle[aria-expanded="true"] {
+    border-color: var(--aqua-soft); color: var(--aqua);
+    box-shadow: 0 0 0 1px var(--aqua-soft), 0 0 16px -6px var(--aqua-glow);
+  }
+  body.mode-track   .studio-toggle[aria-expanded="true"] {
+    border-color: var(--violet-soft); color: var(--violet);
+    box-shadow: 0 0 0 1px var(--violet-soft), 0 0 16px -6px var(--violet-glow);
+  }
+  .studio-toggle .studio-dot {
+    display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+    background: var(--muted);
+  }
+  body.mode-traffic .studio-toggle .studio-dot { background: var(--aqua); box-shadow: 0 0 6px var(--aqua-glow); }
+  body.mode-track   .studio-toggle .studio-dot { background: var(--violet); box-shadow: 0 0 6px var(--violet-glow); }
+  .studio-toggle .caret { font-size: 9px; color: var(--muted); margin-left: 2px; transition: transform .15s; }
+  .studio-toggle[aria-expanded="true"] .caret { transform: rotate(180deg); }
+
+  .studio-panel {
+    margin-top: 12px;
+    background: var(--glass-inner);
+    border: 1px solid var(--glass-border);
+    border-radius: 14px;
+    padding: 14px 16px;
+    display: flex; flex-direction: column; gap: 10px;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+  }
+  .studio-panel[hidden] { display: none; }
+  .studio-row {
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    min-height: 26px;
+  }
+  .studio-row .row-label {
+    text-transform: uppercase; letter-spacing: 0.12em;
+    font-size: 9px; color: var(--muted);
+    font-family: 'Inter', sans-serif; font-weight: 600;
+    width: 74px; flex-shrink: 0;
+  }
+  .studio-check {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 11px; color: var(--dim); cursor: pointer;
+    user-select: none;
+    font-family: 'Inter', sans-serif;
+  }
+  .studio-check input { margin: 0; accent-color: var(--accent); }
+  body.mode-traffic .studio-check input { accent-color: var(--aqua); }
+  body.mode-track   .studio-check input { accent-color: var(--violet); }
+  .rec-btn .rec-dot {
+    display: inline-block; width: 10px; height: 10px; border-radius: 50%;
+    background: #FF5E5E; margin-right: 4px;
+    box-shadow: 0 0 6px rgba(255, 94, 94, 0.6);
+  }
+  .rec-btn.recording {
+    border-color: rgba(255, 94, 94, 0.5); color: #FF5E5E;
+    box-shadow: 0 0 0 1px rgba(255, 94, 94, 0.4), 0 0 16px -4px rgba(255, 94, 94, 0.5);
+  }
+  .rec-btn.recording .rec-dot { animation: rec-pulse 1s ease-in-out infinite; }
+  @keyframes rec-pulse { 50% { opacity: 0.3; } }
+  .rec-status {
+    font-size: 10px; color: var(--muted); letter-spacing: 0.05em;
+    text-transform: uppercase;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  /* ---------- Tips ---------- */
+  .tips { margin-top: 32px; color: var(--dim); font-size: 12px; line-height: 1.7; max-width: 720px; }
+  .tips h3 {
+    font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase;
+    color: var(--text); margin: 22px 0 6px;
+    font-family: 'Inter', sans-serif; font-weight: 600;
+  }
+  .tips code {
+    background: var(--glass-inner);
+    border: 1px solid var(--glass-border);
+    padding: 1px 6px; border-radius: 5px;
+    color: var(--text);
+    font-family: 'JetBrains Mono', monospace; font-size: 10.5px;
+  }
+  .tips strong { color: var(--text); font-weight: 600; }
+  .tips em { color: var(--text); font-style: normal; }
+</style>
+</head>
+<body class="mode-traffic">
+<div class="page">
+  <h1>aiss · time · glass</h1>
+  <p class="sub">
+    Et flydende glaspanel over globen. Timestrip + Frame + Moment i ét værktøj — Traffic eller Track, mørk eller lys, studio-panel på klap. Baggrunden herunder er kun en simulering; i produktionen er det det ægte MapLibre-kort.
+  </p>
+
+  <div class="card">
+    <!-- Top bar: iOS segmented control + compact context pill + theme toggle -->
+    <div class="top-bar">
+      <div class="segment" id="modeSegment" role="tablist">
+        <div class="seg-thumb" id="segThumb"></div>
+        <button class="seg-btn active" data-mode="traffic" role="tab"><span class="glyph">⚓</span>Traffic</button>
+        <button class="seg-btn" data-mode="track" role="tab"><span class="glyph">↝</span>Track</button>
+      </div>
+      <div class="theme-toggle" role="group" aria-label="Theme">
+        <button data-theme="dark"  class="active" title="Dark">◐</button>
+        <button data-theme="light"              title="Light">○</button>
+      </div>
+    </div>
+
+    <div class="body">
+      <!-- Readouts row + zoom chips (unchanged from v3) -->
+      <div class="hdr">
+        <div class="readout">
+          <span class="label">Viewport</span>
+          <span class="value layer" id="vpReadout">—</span>
+        </div>
+        <div class="readout">
+          <span class="label">Playhead</span>
+          <span class="value accent" id="phReadout">—</span>
+        </div>
+        <div class="sep"></div>
+        <div class="zoom-chips" id="zoomChips">
+          <button class="chip" data-span="900000">15m</button>
+          <button class="chip" data-span="3600000">1h</button>
+          <button class="chip" data-span="21600000">6h</button>
+          <button class="chip" data-span="86400000">1d</button>
+          <button class="chip" data-span="604800000">7d</button>
+          <button class="chip active" data-span="2592000000">30d</button>
+          <button class="chip" data-span="31536000000">1y</button>
+          <button class="chip" data-span="all">All</button>
+        </div>
+      </div>
+
+      <!-- TIMESTRIP: shows the currently selected range (zooms with chips) -->
+      <div class="section-heading">
+        <span class="name timestrip">Timestrip</span>
+        <span class="info" data-tip="Chip above picks the strip range. Box = viewport. Drag edges to resize, body to pan, click outside to jump.">?</span>
+      </div>
+      <div class="mini-wrap" id="miniWrap">
+        <div class="mini-bars" id="miniBars"></div>
+        <div class="mini-viewport" id="miniViewport">
+          <div class="edge left"></div>
+          <div class="edge right"></div>
+        </div>
+      </div>
+      <div class="mini-labels">
+        <span id="projStart">—</span>
+        <span id="projEnd">—</span>
+      </div>
+
+      <!-- FRAME: the viewport's contents expanded to full width (with ruler + playhead) -->
+      <div class="section-heading">
+        <span class="name frame">Frame</span>
+        <span class="info" data-tip="Viewport contents expanded. Scroll to zoom, drag to pan, click to set playhead.">?</span>
+      </div>
+
+      <!-- Zoom connector: rounded trapezoid funnel from handle positions to frame edges -->
+      <div class="zoom-connector" id="zoomConnector">
+        <svg preserveAspectRatio="none">
+          <path id="zcFill" class="zc-fill" d=""/>
+          <path id="zcLeft"  class="zc-edge" fill="none" stroke-width="1.5" stroke-linecap="round" d=""/>
+          <path id="zcRight" class="zc-edge" fill="none" stroke-width="1.5" stroke-linecap="round" d=""/>
+        </svg>
+      </div>
+
+      <!-- Ruler -->
+      <div class="ruler" id="ruler"></div>
+
+      <!-- Main timeline (UNCHANGED from v3, + scrubber range overlay) -->
+      <div class="main-wrap">
+        <div class="main-timeline" id="mainTimeline">
+          <div class="main-bars" id="mainBars"></div>
+          <div class="scrub-range" id="scrubRange"></div>
+          <div class="playhead" id="playhead"><div class="handle"></div></div>
+        </div>
+      </div>
+
+      <!-- MOMENT: scrubber window around the playhead -->
+      <div class="section-heading">
+        <span class="name" style="color: var(--accent)">Moment</span>
+        <span class="info" data-tip="Scrubber window around the playhead. Pick a width below.">?</span>
+      </div>
+      <div class="moment-bar">
+        <div class="moment-row">
+          <span class="moment-label">MOMENT</span>
+          <span class="moment-count"><strong id="momentCount">—</strong></span>
+          <span>width: <strong id="momentWidth" style="color:var(--accent)">—</strong></span>
+          <span class="moment-time" id="momentTime">—</span>
+        </div>
+        <div class="moment-scrub" id="momentScrub">
+          <div class="track"></div>
+          <div class="track-filled" id="trackFilled"></div>
+          <div class="knob-window" id="knobWindow"></div>
+          <div class="knob" id="momentKnob"></div>
+        </div>
+      </div>
+
+      <!-- Scrubber width + playback controls -->
+      <div class="controls">
+        <span class="row-label">Width</span>
+        <div class="scrub-chips" id="scrubChips" style="display:flex; gap:3px; flex-wrap:wrap;">
+          <button class="chip" data-width="0">instant</button>
+          <button class="chip" data-width="60000">1m</button>
+          <button class="chip active" data-width="300000">5m</button>
+          <button class="chip" data-width="900000">15m</button>
+          <button class="chip" data-width="3600000">1h</button>
+        </div>
+        <div class="sep"></div>
+        <button class="btn studio-toggle" id="studioToggle" aria-expanded="false">
+          <span class="studio-dot"></span>
+          Studio
+          <span class="caret">▾</span>
+        </button>
+      </div>
+
+      <!-- STUDIO panel: hidden by default. Power-user playback + record tools. -->
+      <div class="studio-panel" id="studioPanel" hidden>
+        <div class="studio-row">
+          <span class="row-label">Playback</span>
+          <button class="btn primary" id="playBtn">▶</button>
+          <button class="btn" id="backBtn" title="Step back"><span id="backLabel">−1t</span></button>
+          <button class="btn" id="fwdBtn" title="Step forward"><span id="fwdLabel">+1t</span></button>
+          <div class="sep"></div>
+          <button class="btn" id="homeBtn" title="Jump to start">⇤</button>
+          <button class="btn" id="endBtn" title="Jump to end">⇥</button>
+          <div class="sep"></div>
+          <label class="studio-check"><input type="checkbox" id="loopChk"> loop</label>
+        </div>
+
+        <div class="studio-row">
+          <span class="row-label">Speed</span>
+          <div class="zoom-chips" id="speedChips">
+            <button class="chip" data-speed="0.25">0.25×</button>
+            <button class="chip" data-speed="0.5">0.5×</button>
+            <button class="chip active" data-speed="1">1×</button>
+            <button class="chip" data-speed="2">2×</button>
+            <button class="chip" data-speed="5">5×</button>
+            <button class="chip" data-speed="10">10×</button>
+            <button class="chip" data-speed="100">100×</button>
+          </div>
+        </div>
+
+        <div class="studio-row">
+          <span class="row-label">Follow</span>
+          <label class="studio-check"><input type="checkbox" id="lockChk"> lock vessel in center</label>
+          <label class="studio-check"><input type="checkbox" id="followChk"> keep playhead in viewport</label>
+        </div>
+
+        <div class="studio-row">
+          <span class="row-label">Record</span>
+          <button class="btn rec-btn" id="recBtn" title="Record map canvas"><span class="rec-dot"></span><span id="recLabel">Record</span></button>
+          <div class="zoom-chips" id="recFormatChips">
+            <button class="chip active" data-format="webm">WebM</button>
+            <button class="chip" data-format="mp4">MP4</button>
+            <button class="chip" data-format="gif">GIF</button>
+          </div>
+          <div class="sep"></div>
+          <span class="rec-status" id="recStatus">idle</span>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="tips">
+    <h3>Den nye retning</h3>
+    <p>
+      Glasspanel <em>oven på</em> kortet — ikke et værktøjsbælte der spiser skærmen. Alle mode-accenter (aqua for Traffic, violet for Track) skinner igennem panelet uden at overdøve globen nedenunder. Vælg <strong>Dark</strong> for rummet, <strong>Light</strong> for den hvide globe.
+    </p>
+
+    <h3>Tre lag, én tidsakse</h3>
+    <p>
+      <strong>Timestrip</strong> er det fulde vindue (vælg med chips). <strong>Frame</strong> er udsnittet der tegnes. <strong>Moment</strong> er båndet omkring playhead — vælg bredde <code>instant</code> til <code>1h</code> og se hvor mange waypoints der ligger i vinduet lige nu.
+    </p>
+
+    <h3>Studio på klap</h3>
+    <p>
+      Play / speed / loop / lock / record er gemt bag <strong>Studio</strong>-knappen så de 90 % af brugerne der kun skruber tidsslider får et roligt interface. Power-users åbner panelet.
+    </p>
+
+    <h3>Prøv det</h3>
+    <p>
+      Klik mellem <strong>Traffic</strong> og <strong>Track</strong> — accenten skifter. Træk i timestrip-kassens kanter — frame zoomer. Klik width <code>15m</code> — Moment-vinduet vokser. Åbn <strong>Studio</strong> og tryk ▶.
+    </p>
+  </div>
+</div>
+
+<script>
+(() => {
+  const PROJECT_START = Date.UTC(2024, 3, 1);
+  const PROJECT_END   = Date.UTC(2026, 3, 17, 23, 59, 59);
+  const PROJECT_SPAN  = PROJECT_END - PROJECT_START;
+
+  const state = {
+    mode: 'traffic',
+    // Strip = the full range drawn in the TIMESTRIP. Set by chips.
+    stripStart: 0, stripEnd: 0,
+    // Viewport = the sub-range selected inside the strip (handles). Feeds Frame + Moment.
+    vpStart: 0, vpEnd: 0,
+    playhead: 0,
+    scrubWidth: 300_000,  // 5 min default
+    playing: false,
+    playSpeed: 1,
+    loop: false,
+    lockVessel: false,
+    follow: false,
+    recFormat: 'webm',
+    recording: false,
+  };
+
+  const $miniWrap = document.getElementById('miniWrap');
+  const $miniBars = document.getElementById('miniBars');
+  const $miniVp = document.getElementById('miniViewport');
+  const $ruler = document.getElementById('ruler');
+  const $mainWrap = document.getElementById('mainTimeline');
+  const $mainBars = document.getElementById('mainBars');
+  const $playhead = document.getElementById('playhead');
+  const $scrubRange = document.getElementById('scrubRange');
+  const $vpReadout = document.getElementById('vpReadout');
+  const $phReadout = document.getElementById('phReadout');
+  const $projStart = document.getElementById('projStart');
+  const $projEnd = document.getElementById('projEnd');
+  const $backBtn = document.getElementById('backBtn');
+  const $fwdBtn = document.getElementById('fwdBtn');
+  const $backLabel = document.getElementById('backLabel');
+  const $fwdLabel = document.getElementById('fwdLabel');
+  const $playBtn = document.getElementById('playBtn');
+  const $chips = document.getElementById('zoomChips');
+  const $scrubChips = document.getElementById('scrubChips');
+  const $studioToggle = document.getElementById('studioToggle');
+  const $studioPanel = document.getElementById('studioPanel');
+  const $speedChips = document.getElementById('speedChips');
+  const $homeBtn = document.getElementById('homeBtn');
+  const $endBtn = document.getElementById('endBtn');
+  const $loopChk = document.getElementById('loopChk');
+  const $lockChk = document.getElementById('lockChk');
+  const $followChk = document.getElementById('followChk');
+  const $recBtn = document.getElementById('recBtn');
+  const $recFormatChips = document.getElementById('recFormatChips');
+  const $recStatus = document.getElementById('recStatus');
+  const $momentCount = document.getElementById('momentCount');
+  const $momentWidth = document.getElementById('momentWidth');
+  const $momentTime = document.getElementById('momentTime');
+  const $momentScrub = document.getElementById('momentScrub');
+  const $momentKnob = document.getElementById('momentKnob');
+  const $trackFilled = document.getElementById('trackFilled');
+  const $knobWindow = document.getElementById('knobWindow');
+  const $modeSegment = document.getElementById('modeSegment');
+  const $segThumb = document.getElementById('segThumb');
+  const $modeBtns = document.querySelectorAll('.seg-btn');
+  const $themeBtns = document.querySelectorAll('.theme-toggle button');
+  const $zoomConnector = document.getElementById('zoomConnector');
+  const $zcFill  = document.getElementById('zcFill');
+  const $zcLeft  = document.getElementById('zcLeft');
+  const $zcRight = document.getElementById('zcRight');
+
+  const pad = n => String(n).padStart(2, '0');
+  function fmtFull(ms) {
+    const d = new Date(ms);
+    return d.getUTCFullYear()+'-'+pad(d.getUTCMonth()+1)+'-'+pad(d.getUTCDate())+' '+pad(d.getUTCHours())+':'+pad(d.getUTCMinutes())+':'+pad(d.getUTCSeconds());
+  }
+  function fmtCompact(ms, span) {
+    const d = new Date(ms);
+    if (span < 2*3600_000) return pad(d.getUTCHours())+':'+pad(d.getUTCMinutes())+':'+pad(d.getUTCSeconds());
+    if (span < 48*3600_000) return pad(d.getUTCHours())+':'+pad(d.getUTCMinutes());
+    if (span < 45*86400_000) return pad(d.getUTCMonth()+1)+'-'+pad(d.getUTCDate())+' '+pad(d.getUTCHours())+':'+pad(d.getUTCMinutes());
+    if (span < 2*365*86400_000) return d.getUTCFullYear()+'-'+pad(d.getUTCMonth()+1)+'-'+pad(d.getUTCDate());
+    return d.getUTCFullYear()+'-'+pad(d.getUTCMonth()+1);
+  }
+  function fmtDur(ms) {
+    if (ms === 0) return 'instant';
+    const s = Math.floor(ms/1000);
+    if (s < 60) return s+'s';
+    if (s < 3600) return Math.floor(s/60)+'m';
+    if (s < 86400) return (s/3600).toFixed(1)+'h';
+    if (s < 30*86400) return Math.floor(s/86400)+'d';
+    if (s < 2*365*86400) return Math.floor(s/(30*86400))+'mo';
+    return (s/(365*86400)).toFixed(1)+'y';
+  }
+  function seeded(seed) { let s = seed; return () => { s = (s*9301+49297)%233280; return s/233280; }; }
+  function trafficModel() {
+    return (ms) => {
+      const hour = ((ms % 86400_000) + 86400_000) % 86400_000 / 3600_000;
+      const day = Math.floor(ms / 86400_000);
+      let v = 0.3 + 0.35 * Math.exp(-Math.pow((hour-9)/2, 2));
+      v += 0.35 * Math.exp(-Math.pow((hour-16)/2.5, 2));
+      v += Math.abs(Math.sin(day * 1.37)) * 0.3;
+      if (Math.abs(Math.sin(day * 0.19)) > 0.97) v *= 0.3;
+      return Math.min(1, v);
+    };
+  }
+  function trackModel() {
+    const r = seeded(42);
+    const voyages = [];
+    for (let i = 0; i < 50; i++) voyages.push({ center: PROJECT_START + r() * PROJECT_SPAN, width: (0.3 + r() * 4) * 86400_000, peak: 0.3 + r() * 0.7 });
+    for (let i = 0; i < 6; i++)  voyages.push({ center: PROJECT_START + r() * PROJECT_SPAN, width: (3 + r() * 10) * 86400_000, peak: 0.5 + r() * 0.4 });
+    return (ms) => {
+      let sum = 0;
+      for (const v of voyages) { const dx = (ms - v.center) / v.width; sum += v.peak * Math.exp(-dx*dx); }
+      return Math.min(1, sum);
+    };
+  }
+  const MODELS = { traffic: trafficModel(), track: trackModel() };
+  function densityAt(ms) { return MODELS[state.mode](ms); }
+  function densitySeries(fromMs, toMs, n) {
+    const out = new Float32Array(n);
+    const step = (toMs - fromMs) / n;
+    for (let i = 0; i < n; i++) {
+      let s = 0;
+      for (let k = 0; k < 3; k++) s += densityAt(fromMs + (i + k/3) * step);
+      out[i] = s / 3;
+    }
+    return out;
+  }
+
+  function renderMini() {
+    // TIMESTRIP draws the STRIP RANGE (set by chips). The viewport BOX
+    // inside it is a sub-selection (set by handles) — see updateMiniViewport.
+    const span = state.stripEnd - state.stripStart;
+    const stripW = $miniWrap.getBoundingClientRect().width || 800;
+    const maxByPx = Math.max(20, Math.floor(stripW / 4));
+    let target;
+    if (span <= 15.5 * 60_000)       target = 15;
+    else if (span <= 1.1 * 3600_000) target = 12;
+    else if (span <= 6.1 * 3600_000) target = 12;
+    else if (span <= 25 * 3600_000)  target = 24;
+    else if (span <= 7.5 * 86400_000) target = 7;
+    else if (span <= 31 * 86400_000)  target = 30;
+    else if (span <= 370 * 86400_000) target = 12;
+    else                               target = 120;
+    const N = Math.max(6, Math.min(maxByPx, target));
+    const d = densitySeries(state.stripStart, state.stripEnd, N);
+    const max = Math.max(0.001, ...d);
+    $miniBars.innerHTML = '';
+    for (const v of d) {
+      const b = document.createElement('div');
+      b.className = 'bar';
+      b.style.height = Math.min(100, (v / max) * 100) + '%';
+      $miniBars.appendChild(b);
+    }
+    $projStart.textContent = fmtCompact(state.stripStart, span);
+    $projEnd.textContent = fmtCompact(state.stripEnd, span);
+  }
+  function updateMiniViewport() {
+    // Viewport BOX is positioned inside the strip based on vpStart/vpEnd
+    // relative to stripStart/stripEnd. Chips reset it to full width; handles
+    // shrink/pan it within the strip.
+    const stripSpan = Math.max(1, state.stripEnd - state.stripStart);
+    const left = ((state.vpStart - state.stripStart) / stripSpan) * 100;
+    const width = ((state.vpEnd - state.vpStart) / stripSpan) * 100;
+    $miniVp.style.left = Math.max(0, left) + '%';
+    $miniVp.style.width = Math.max(0.3, Math.min(100 - Math.max(0, left), width)) + '%';
+  }
+  function renderRuler() {
+    const span = state.vpEnd - state.vpStart;
+    $ruler.innerHTML = '';
+    const steps = [
+      { ms: 1000, fmt: ms => new Date(ms).toISOString().substr(11,8) },
+      { ms: 10_000, fmt: ms => new Date(ms).toISOString().substr(11,8) },
+      { ms: 60_000, fmt: ms => new Date(ms).toISOString().substr(11,5) },
+      { ms: 5*60_000, fmt: ms => new Date(ms).toISOString().substr(11,5) },
+      { ms: 15*60_000, fmt: ms => new Date(ms).toISOString().substr(11,5) },
+      { ms: 60*60_000, fmt: ms => new Date(ms).toISOString().substr(11,5) },
+      { ms: 6*3600_000, fmt: ms => new Date(ms).toISOString().substr(5,11).replace('T', ' ') },
+      { ms: 86400_000, fmt: ms => new Date(ms).toISOString().substr(5,5) },
+      { ms: 7*86400_000, fmt: ms => new Date(ms).toISOString().substr(5,5) },
+      { ms: 30*86400_000, fmt: ms => new Date(ms).toISOString().substr(0,7) },
+      { ms: 365*86400_000, fmt: ms => new Date(ms).toISOString().substr(0,4) },
+    ];
+    const target = 8;
+    const chosen = steps.reduce((best, s) => Math.abs(span/s.ms - target) < Math.abs(span/best.ms - target) ? s : best, steps[0]);
+    const start = Math.ceil(state.vpStart / chosen.ms) * chosen.ms;
+    for (let t = start; t < state.vpEnd; t += chosen.ms) {
+      const pct = (t - state.vpStart) / span * 100;
+      const tick = document.createElement('div');
+      tick.className = 'tick';
+      tick.style.left = pct + '%';
+      const lbl = document.createElement('span');
+      lbl.textContent = chosen.fmt(t);
+      tick.appendChild(lbl);
+      $ruler.appendChild(tick);
+    }
+  }
+  function renderMain() {
+    const N = Math.max(60, Math.min(220, Math.floor($mainWrap.clientWidth / 4)));
+    const d = densitySeries(state.vpStart, state.vpEnd, N);
+    $mainBars.innerHTML = '';
+    const max = Math.max(0.001, ...d);
+    for (const v of d) {
+      const b = document.createElement('div');
+      b.className = 'bar' + (v / max > 0.7 ? ' hot' : '');
+      b.style.height = Math.min(100, (v / max) * 100) + '%';
+      $mainBars.appendChild(b);
+    }
+  }
+  function updatePlayhead() {
+    const span = state.vpEnd - state.vpStart;
+    if (state.playhead < state.vpStart || state.playhead > state.vpEnd) {
+      $playhead.style.display = 'none';
+      $scrubRange.style.display = 'none';
+    } else {
+      $playhead.style.display = '';
+      const pct = (state.playhead - state.vpStart) / span * 100;
+      $playhead.style.left = pct + '%';
+      // scrub range
+      if (state.scrubWidth > 0) {
+        $scrubRange.style.display = '';
+        const halfW = state.scrubWidth / 2;
+        const scrubStart = Math.max(state.vpStart, state.playhead - halfW);
+        const scrubEnd = Math.min(state.vpEnd, state.playhead + halfW);
+        $scrubRange.style.left = ((scrubStart - state.vpStart) / span * 100) + '%';
+        $scrubRange.style.width = ((scrubEnd - scrubStart) / span * 100) + '%';
+      } else {
+        $scrubRange.style.display = 'none';
+      }
+    }
+  }
+  function updateReadouts() {
+    const span = state.vpEnd - state.vpStart;
+    $vpReadout.textContent = fmtCompact(state.vpStart, span)+' → '+fmtCompact(state.vpEnd, span)+' ('+fmtDur(span)+')';
+    $phReadout.textContent = fmtFull(state.playhead);
+    $backLabel.textContent = '−'+fmtDur(span/10);
+    $fwdLabel.textContent = '+'+fmtDur(span/10);
+
+    // MOMENT info: estimate count from density * width
+    const halfW = state.scrubWidth / 2 || 1;
+    const fromMs = state.playhead - halfW;
+    const toMs = state.playhead + halfW;
+    // sample density over the window for a pseudo count
+    let count = 0;
+    const samples = Math.max(1, Math.min(40, Math.floor(state.scrubWidth / 30_000)));
+    for (let i = 0; i < samples; i++) {
+      count += densityAt(fromMs + (toMs - fromMs) * (i + 0.5) / samples);
+    }
+    if (state.mode === 'traffic') {
+      const est = Math.round(count / samples * (state.scrubWidth / 60_000) * 12 + 5);
+      $momentCount.textContent = est + ' vessels active';
+    } else {
+      const est = Math.round(count / samples * (state.scrubWidth / 60_000) * 8 + 2);
+      $momentCount.textContent = est + ' waypoints';
+    }
+    $momentWidth.textContent = fmtDur(state.scrubWidth);
+    if (state.scrubWidth === 0) {
+      $momentTime.textContent = fmtFull(state.playhead);
+    } else {
+      $momentTime.textContent = fmtCompact(state.playhead - halfW, span) + ' — ' + fmtCompact(state.playhead + halfW, span);
+    }
+    updateMomentScrub();
+  }
+
+  function updateZoomConnector() {
+    // Lines go from the timestrip viewport-box corners (top) down to the
+    // main timeline's left/right edges (bottom). The zoom-connector sits
+    // between mini-labels and ruler; it's 16px tall.
+    const miniR = $miniWrap.getBoundingClientRect();
+    const connR = $zoomConnector.getBoundingClientRect();
+    const mainR = $mainWrap.getBoundingClientRect();
+    const svg = $zoomConnector.querySelector('svg');
+    const w = connR.width;
+    const h = connR.height;
+    svg.setAttribute('viewBox', `0 0 ${w} ${h}`);
+
+    // Timestrip viewport box in connector-local X coords.
+    // The box is positioned inside miniWrap at (vpStart-stripStart)/stripSpan.
+    const stripSpan = Math.max(1, state.stripEnd - state.stripStart);
+    const pctL = (state.vpStart - state.stripStart) / stripSpan;
+    const pctR = (state.vpEnd   - state.stripStart) / stripSpan;
+    // Mini viewport is drawn inside miniWrap; align to miniWrap, not connector
+    const miniOffset = miniR.left - connR.left;
+    const topL = miniOffset + pctL * miniR.width;
+    const topR = miniOffset + pctR * miniR.width;
+    // Main timeline edges (left = 0, right = full container width)
+    const mainOffset = mainR.left - connR.left;
+    const botL = mainOffset;
+    const botR = mainOffset + mainR.width;
+
+    // Rounded trapezoid funnel. Two smooth curves (cubic bezier) from the handle
+    // positions down to the frame edges, filled softly between.
+    const y0 = 0, y1 = h;
+    const midY = h * 0.55;
+    // Left curve: starts at (topL, 0), ends at (botL, h), with control points for
+    // a soft S-less bend — strong vertical at top (handle) easing out to bottom.
+    const leftPath  = `M ${topL} ${y0} C ${topL} ${midY}, ${botL} ${midY}, ${botL} ${y1}`;
+    const rightPath = `M ${topR} ${y0} C ${topR} ${midY}, ${botR} ${midY}, ${botR} ${y1}`;
+    // Filled funnel: left curve down, across frame top, right curve up, across handle gap.
+    const fillPath = `M ${topL} ${y0}
+      C ${topL} ${midY}, ${botL} ${midY}, ${botL} ${y1}
+      L ${botR} ${y1}
+      C ${botR} ${midY}, ${topR} ${midY}, ${topR} ${y0} Z`;
+    $zcLeft.setAttribute('d', leftPath);
+    $zcRight.setAttribute('d', rightPath);
+    $zcFill.setAttribute('d', fillPath);
+  }
+
+  function updateMomentScrub() {
+    const span = state.vpEnd - state.vpStart;
+    const r = $momentScrub.getBoundingClientRect();
+    const usableW = r.width - 16; // 8px padding each side
+    const t = Math.max(0, Math.min(1, (state.playhead - state.vpStart) / span));
+    const leftPx = 8 + t * usableW;
+    $momentKnob.style.left = leftPx + 'px';
+    $trackFilled.style.width = (leftPx - 8) + 'px';
+    // knob window visual
+    if (state.scrubWidth > 0) {
+      const widthPx = (state.scrubWidth / span) * usableW;
+      const displayW = Math.max(18, Math.min(usableW, widthPx));
+      $knobWindow.style.display = '';
+      $knobWindow.style.width = displayW + 'px';
+      $knobWindow.style.left = (leftPx - displayW/2) + 'px';
+    } else {
+      $knobWindow.style.display = 'none';
+    }
+  }
+  function render() {
+    renderMini();
+    renderMain();
+    renderRuler();
+    updateMiniViewport();
+    updatePlayhead();
+    updateReadouts();
+    updateZoomConnector();
+  }
+  window.addEventListener('resize', () => {
+    renderMini();
+    renderMain();
+    updateMiniViewport();
+    updatePlayhead();
+    updateMomentScrub();
+    updateZoomConnector();
+    positionSegThumb();
+  });
+
+  function setViewport(start, end) {
+    const MIN_SPAN = 60_000;
+    if (end - start < MIN_SPAN) end = start + MIN_SPAN;
+    // Clamp viewport inside the STRIP range (not the whole project).
+    const sS = state.stripStart, sE = state.stripEnd;
+    if (start < sS) { end += sS - start; start = sS; }
+    if (end > sE) { start -= end - sE; end = sE; if (start < sS) start = sS; }
+    state.vpStart = start;
+    state.vpEnd = end;
+    if (state.playhead < start || state.playhead > end) state.playhead = (start + end) / 2;
+    render();
+  }
+  function setStripRange(start, end) {
+    // Chip-driven: set the TIMESTRIP range and reset the viewport box to fill it.
+    if (start < PROJECT_START) start = PROJECT_START;
+    if (end > PROJECT_END) end = PROJECT_END;
+    if (end - start < 60_000) end = start + 60_000;
+    state.stripStart = start;
+    state.stripEnd = end;
+    state.vpStart = start;
+    state.vpEnd = end;
+    if (state.playhead < start || state.playhead > end) state.playhead = (start + end) / 2;
+    render();
+  }
+  function setStripSpanCentered(span, around) {
+    const center = around ?? state.playhead ?? (state.stripStart + state.stripEnd)/2;
+    if (span === 'all') return setStripRange(PROJECT_START, PROJECT_END);
+    setStripRange(center - span/2, center + span/2);
+  }
+  // kept for back-compat with keyboard/buttons that called setViewportSpanCentered
+  function setViewportSpanCentered(span, around) {
+    // Treat as a strip change (what the chips do).
+    setStripSpanCentered(span, around);
+  }
+  function panViewport(dms) { setViewport(state.vpStart + dms, state.vpEnd + dms); }
+  function zoomViewport(factor, anchor) {
+    // Zoom the viewport within the strip (used by main-timeline wheel).
+    const span = state.vpEnd - state.vpStart;
+    const stripSpan = state.stripEnd - state.stripStart;
+    const a = anchor ?? (state.vpStart + span/2);
+    const newSpan = Math.max(60_000, Math.min(stripSpan, span * factor));
+    const t = (a - state.vpStart) / span;
+    setViewport(a - newSpan * t, a + newSpan * (1 - t));
+  }
+
+  // Mini viewport drag — v3 style. dMs scales to STRIP span, so the box moves
+  // visibly when you drag a handle (and still resizes/pans within the strip).
+  let dragMode = null, dragStartX = 0, dragInitial = null;
+  $miniVp.addEventListener('pointerdown', (e) => {
+    if (e.target.classList.contains('edge')) {
+      dragMode = e.target.classList.contains('left') ? 'resize-l' : 'resize-r';
+    } else {
+      dragMode = 'pan';
+    }
+    dragStartX = e.clientX;
+    dragInitial = { start: state.vpStart, end: state.vpEnd };
+    e.target.setPointerCapture(e.pointerId);
+    e.stopPropagation();
+  });
+  $miniVp.addEventListener('pointermove', (e) => {
+    if (!dragMode) return;
+    const r = $miniWrap.getBoundingClientRect();
+    const stripSpan = state.stripEnd - state.stripStart;
+    const dPx = e.clientX - dragStartX;
+    const dMs = (dPx / r.width) * stripSpan;
+    if (dragMode === 'pan') setViewport(dragInitial.start + dMs, dragInitial.end + dMs);
+    else if (dragMode === 'resize-l') setViewport(dragInitial.start + dMs, dragInitial.end);
+    else if (dragMode === 'resize-r') setViewport(dragInitial.start, dragInitial.end + dMs);
+  });
+  $miniVp.addEventListener('pointerup', () => { dragMode = null; });
+  $miniVp.addEventListener('pointercancel', () => { dragMode = null; });
+
+  // Click on the strip outside the viewport → recenter viewport at click (preserve span).
+  $miniWrap.addEventListener('click', (e) => {
+    if (e.target.closest('#miniViewport')) return;
+    const r = $miniWrap.getBoundingClientRect();
+    const t = (e.clientX - r.left) / r.width;
+    const target = state.stripStart + t * (state.stripEnd - state.stripStart);
+    const span = state.vpEnd - state.vpStart;
+    setViewport(target - span/2, target + span/2);
+  });
+
+  // Main timeline: drag pan, click to move playhead, wheel to zoom (UNCHANGED from v3)
+  let mainDrag = null;
+  $mainWrap.addEventListener('pointerdown', (e) => {
+    mainDrag = { x: e.clientX, vpStart: state.vpStart, vpEnd: state.vpEnd, moved: false };
+    $mainWrap.setPointerCapture(e.pointerId);
+  });
+  $mainWrap.addEventListener('pointermove', (e) => {
+    if (!mainDrag) return;
+    const dx = e.clientX - mainDrag.x;
+    if (Math.abs(dx) > 3) mainDrag.moved = true;
+    if (!mainDrag.moved) return;
+    const r = $mainWrap.getBoundingClientRect();
+    const span = mainDrag.vpEnd - mainDrag.vpStart;
+    const dMs = -(dx / r.width) * span;
+    setViewport(mainDrag.vpStart + dMs, mainDrag.vpEnd + dMs);
+  });
+  $mainWrap.addEventListener('pointerup', (e) => {
+    if (mainDrag && !mainDrag.moved) {
+      const r = $mainWrap.getBoundingClientRect();
+      const t = (e.clientX - r.left) / r.width;
+      state.playhead = state.vpStart + t * (state.vpEnd - state.vpStart);
+      updatePlayhead(); updateReadouts();
+    }
+    mainDrag = null;
+  });
+  $mainWrap.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const r = $mainWrap.getBoundingClientRect();
+    const t = (e.clientX - r.left) / r.width;
+    const anchor = state.vpStart + t * (state.vpEnd - state.vpStart);
+    const factor = e.deltaY > 0 ? 1.25 : 0.8;
+    zoomViewport(factor, anchor);
+  }, { passive: false });
+
+  $chips.addEventListener('click', (e) => {
+    const chip = e.target.closest('.chip'); if (!chip) return;
+    document.querySelectorAll('#zoomChips .chip').forEach(c => c.classList.remove('active'));
+    chip.classList.add('active');
+    const s = chip.dataset.span;
+    // Chips drive the STRIP range and reset the viewport box to full width.
+    if (s === 'all') setStripSpanCentered('all'); else setStripSpanCentered(+s);
+  });
+
+  // Scrubber width chips
+  $scrubChips.addEventListener('click', (e) => {
+    const chip = e.target.closest('.chip'); if (!chip) return;
+    document.querySelectorAll('#scrubChips .chip').forEach(c => c.classList.remove('active'));
+    chip.classList.add('active');
+    state.scrubWidth = +chip.dataset.width;
+    updatePlayhead(); updateReadouts();
+  });
+
+  // MOMENT scrubber: drag knob to move playhead
+  let momentDrag = null;
+  $momentKnob.addEventListener('pointerdown', (e) => {
+    momentDrag = { x: e.clientX, ph: state.playhead };
+    $momentKnob.setPointerCapture(e.pointerId);
+    e.stopPropagation();
+  });
+  $momentKnob.addEventListener('pointermove', (e) => {
+    if (!momentDrag) return;
+    const r = $momentScrub.getBoundingClientRect();
+    const usableW = r.width - 16;
+    const span = state.vpEnd - state.vpStart;
+    const dMs = ((e.clientX - momentDrag.x) / usableW) * span;
+    state.playhead = Math.max(state.vpStart, Math.min(state.vpEnd, momentDrag.ph + dMs));
+    updatePlayhead(); updateReadouts();
+  });
+  $momentKnob.addEventListener('pointerup', () => { momentDrag = null; });
+  $momentKnob.addEventListener('pointercancel', () => { momentDrag = null; });
+
+  // Click on MOMENT track to jump playhead
+  $momentScrub.addEventListener('click', (e) => {
+    if (e.target.closest('.knob')) return;
+    const r = $momentScrub.getBoundingClientRect();
+    const usableW = r.width - 16;
+    const t = Math.max(0, Math.min(1, (e.clientX - r.left - 8) / usableW));
+    const span = state.vpEnd - state.vpStart;
+    state.playhead = state.vpStart + t * span;
+    updatePlayhead(); updateReadouts();
+  });
+
+  // Playback
+  let rafId = null, lastFrame = 0;
+  function tick(now) {
+    if (!lastFrame) lastFrame = now;
+    const dt = now - lastFrame;
+    lastFrame = now;
+    const span = state.vpEnd - state.vpStart;
+    // Base speed: cover viewport span in 15s at 1×. Speed chips multiply this.
+    const speedMs = (span / 15_000) * state.playSpeed;
+    state.playhead += dt * speedMs;
+    if (state.playhead >= state.vpEnd) {
+      if (state.loop) { state.playhead = state.vpStart; }
+      else { state.playhead = state.vpEnd; stopPlay(); }
+    }
+    updatePlayhead(); updateReadouts();
+    if (state.playing) rafId = requestAnimationFrame(tick);
+  }
+  function startPlay() {
+    if (state.playhead >= state.vpEnd) state.playhead = state.vpStart;
+    state.playing = true; lastFrame = 0;
+    $playBtn.textContent = '❚❚';
+    rafId = requestAnimationFrame(tick);
+  }
+  function stopPlay() {
+    state.playing = false;
+    $playBtn.textContent = '▶';
+    if (rafId) cancelAnimationFrame(rafId);
+  }
+  $playBtn.addEventListener('click', () => state.playing ? stopPlay() : startPlay());
+  $backBtn.addEventListener('click', () => {
+    const span = state.vpEnd - state.vpStart;
+    state.playhead = Math.max(state.vpStart, state.playhead - span/10);
+    updatePlayhead(); updateReadouts();
+  });
+  $fwdBtn.addEventListener('click', () => {
+    const span = state.vpEnd - state.vpStart;
+    state.playhead = Math.min(state.vpEnd, state.playhead + span/10);
+    updatePlayhead(); updateReadouts();
+  });
+  $homeBtn.addEventListener('click', () => {
+    state.playhead = state.vpStart;
+    updatePlayhead(); updateReadouts();
+  });
+  $endBtn.addEventListener('click', () => {
+    state.playhead = state.vpEnd;
+    updatePlayhead(); updateReadouts();
+  });
+
+  // ---------- Studio toggle ----------
+  $studioToggle.addEventListener('click', () => {
+    const open = $studioPanel.hasAttribute('hidden');
+    if (open) { $studioPanel.removeAttribute('hidden'); $studioToggle.setAttribute('aria-expanded', 'true'); }
+    else      { $studioPanel.setAttribute('hidden', '');  $studioToggle.setAttribute('aria-expanded', 'false'); }
+  });
+
+  // ---------- Speed chips ----------
+  $speedChips.addEventListener('click', (e) => {
+    const chip = e.target.closest('.chip'); if (!chip) return;
+    $speedChips.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+    chip.classList.add('active');
+    state.playSpeed = +chip.dataset.speed;
+  });
+
+  // ---------- Loop / Lock / Follow ----------
+  $loopChk.addEventListener('change', e => { state.loop = e.target.checked; });
+  $lockChk.addEventListener('change', e => {
+    state.lockVessel = e.target.checked;
+    // Hook up to map "lock-to-vessel" in production TimeSlider.tsx
+  });
+  $followChk.addEventListener('change', e => { state.follow = e.target.checked; });
+
+  // ---------- Record (stub — real MediaRecorder in production) ----------
+  $recFormatChips.addEventListener('click', (e) => {
+    const chip = e.target.closest('.chip'); if (!chip) return;
+    $recFormatChips.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+    chip.classList.add('active');
+    state.recFormat = chip.dataset.format;
+  });
+  const $recLabel = document.getElementById('recLabel');
+  $recBtn.addEventListener('click', () => {
+    state.recording = !state.recording;
+    if (state.recording) {
+      $recBtn.classList.add('recording');
+      $recLabel.textContent = 'Stop';
+      $recStatus.textContent = 'rec · ' + state.recFormat;
+      // In production: MediaRecorder on map canvas with chosen format
+    } else {
+      $recBtn.classList.remove('recording');
+      $recLabel.textContent = 'Record';
+      $recStatus.textContent = 'saved (stub)';
+      setTimeout(() => { if (!state.recording) $recStatus.textContent = 'idle'; }, 1800);
+    }
+  });
+
+  function positionSegThumb() {
+    const active = $modeSegment.querySelector('.seg-btn.active');
+    if (!active) return;
+    const segR = $modeSegment.getBoundingClientRect();
+    const btnR = active.getBoundingClientRect();
+    $segThumb.style.left  = (btnR.left - segR.left) + 'px';
+    $segThumb.style.width = btnR.width + 'px';
+  }
+  function setMode(m) {
+    state.mode = m;
+    document.body.className = 'mode-' + m;
+    $modeBtns.forEach(b => b.classList.toggle('active', b.dataset.mode === m));
+    positionSegThumb();
+    renderMini();
+    render();
+  }
+  $modeBtns.forEach(b => b.addEventListener('click', () => setMode(b.dataset.mode)));
+
+  // Theme toggle (dark/light)
+  function setTheme(t) {
+    document.documentElement.setAttribute('data-theme', t);
+    $themeBtns.forEach(b => b.classList.toggle('active', b.dataset.theme === t));
+  }
+  $themeBtns.forEach(b => b.addEventListener('click', () => setTheme(b.dataset.theme)));
+
+  window.addEventListener('keydown', (e) => {
+    if (e.target.tagName === 'INPUT') return;
+    const span = state.vpEnd - state.vpStart;
+    if (e.code === 'Space') { e.preventDefault(); state.playing ? stopPlay() : startPlay(); }
+    else if (e.code === 'ArrowLeft' && e.shiftKey) panViewport(-span);
+    else if (e.code === 'ArrowRight' && e.shiftKey) panViewport(span);
+    else if (e.code === 'ArrowLeft') { state.playhead = Math.max(state.vpStart, state.playhead - span/10); updatePlayhead(); updateReadouts(); }
+    else if (e.code === 'ArrowRight') { state.playhead = Math.min(state.vpEnd, state.playhead + span/10); updatePlayhead(); updateReadouts(); }
+    else if (e.key === '+' || e.key === '=') zoomViewport(0.6, state.playhead);
+    else if (e.key === '-') zoomViewport(1.6, state.playhead);
+    else if (e.code === 'Home') { state.playhead = state.vpStart; updatePlayhead(); updateReadouts(); }
+    else if (e.code === 'End') { state.playhead = state.vpEnd; updatePlayhead(); updateReadouts(); }
+    else if (e.key === 't' || e.key === 'T') setMode('traffic');
+    else if (e.key === 'k' || e.key === 'K') setMode('track');
+  });
+
+  const now = PROJECT_END;
+  // Default: 30 days — chip sets the STRIP range (and viewport fills it).
+  state.playhead = now - 15 * 86400_000;
+  setStripRange(now - 30 * 86400_000, now);
+  // Run once more after first paint so moment-scrub + zoom-connector + bars + seg-thumb get real widths
+  requestAnimationFrame(() => { renderMini(); updateMiniViewport(); updateMomentScrub(); updateZoomConnector(); positionSegThumb(); });
+})();
+</script>
+</body>
+</html>

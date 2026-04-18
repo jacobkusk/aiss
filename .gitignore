@@ -44,3 +44,11 @@ next-env.d.ts
 __pycache__/
 *.pyc
 *.pyo
+
+# git worktrees for experimental branches
+.worktrees/
+
+# local scratch / build caches / probes
+/tmp/
+*.tmp
+track-direction-test.html

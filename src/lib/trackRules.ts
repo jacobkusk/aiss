@@ -1,128 +1,128 @@
 /**
- * WAYPOINT / TRACK / DOT RULES — aiss.network
- * ───────────────────────────────────────────
- * Single source of truth. Two layers now + one future layer.
+ * TRACK RULES — aiss.network
+ * ══════════════════════════
+ *
+ * This file is the ONE PLACE where we decide how a tracked vessel looks on
+ * the map. TrackLayer.tsx reads the constants below and paints accordingly.
+ *
+ * If you see a track rule explained somewhere else in the code — delete it
+ * and point here instead. Rules live in one place, not two.
  *
  *
- *   1. WP   — the facts         (button: "WP")    — IMPLEMENTED
- *   2. LINE — our interpretation (button: "Line") — NOT YET IMPLEMENTED
- *   3. D·P  — compressed LINE                     — FUTURE
+ *   What are we drawing?
+ *   ─────────────────────
+ *
+ *   Every AIS message from a vessel becomes a "waypoint" (WP): a real, CRC-
+ *   verified fix at a real time. We never merge them, invent them, or
+ *   throw them away. Click a vessel → we draw its visible waypoints in
+ *   order, connected by a line.
+ *
+ *   Two display modes — a toggle in the sidebar:
+ *
+ *       "Line" mode  →  just the line  +  FROM / TO markers
+ *       "WP"   mode  →  the same line  +  a dot, ring, number and direction
+ *                       triangle on every waypoint
+ *
+ *   WP mode is strictly LINE mode with extra detail layered on top.
+ *   Nothing is exclusive to WP mode except those extras.
  *
  *
- * ─── 1. WP LAYER ─────────────────────────────────────────────────────────────
+ *   The line has 4 segment kinds
+ *   ─────────────────────────────
  *
- * Every WP is a real CRC-verified AIS fix. We never throw one away, merge them,
- * or invent them. For one vessel they are numbered 1, 2, 3 … N.
+ *   Between any two consecutive waypoints, how long was the vessel silent?
  *
- * The WP layer draws three things on the map:
+ *       ─────   < 5  min silent  →  solid line (normal reporting rate)
+ *       · · ·   5–10 min silent  →  short gap  (dense dashes,  medium grey)
+ *       ─ ─ ─  10–20 min silent  →  long  gap  (sparse dashes, light  grey)
+ *       (blank) > 20 min silent  →  nothing — we treat this as a new track
  *
- *     wp        — the waypoint itself (dot)
- *     wp-line   — line between consecutive WPs
- *     wp-rings  — ring around each WP
+ *   And tiny arrows — chevrons — point along the direction of travel.
+ *   Placement rules live in DIRECTION below: one per N metres of cumulative
+ *   track plus one at every colour change.
  *
- * Rule sets govern how these look — all unchanged from before:
  *
- *   ── NUMBERING (seq on each WP) ────────────────────────────────────────
+ *   The line has 4 colours (the "prediction colour")
+ *   ─────────────────────────────────────────────────
  *
- *     WPs are numbered 1, 2, 3 … N within the current visible time
- *     window, per vessel. The first WP in the window is ALWAYS 1.
+ *   Imagine a vessel going 10 knots. In 30 s we'd expect it about 154 m
+ *   ahead. When the next real fix arrives, how far off was our guess?
  *
- *       • Per vessel      — each boat has its own sequence
+ *       GREEN    ≤ 23 m   — right where we thought
+ *       YELLOW   23–51 m  — a little off
+ *       ORANGE   51–77 m  — noticeably off
+ *       RED      > 77 m   — far off / something weird (spoof? GPS glitch?)
+ *
+ *   The colour paints BOTH the segment arriving at each waypoint AND the
+ *   ring around that waypoint. A row of green rings = predictable vessel.
+ *   A red ring = the next position surprised us.
+ *
+ *   Auto-green (no score, treat as predictable) when any of:
+ *       • The vessel is basically stopped (SOG < 0.5 kn)
+ *       • It's the first point in the window
+ *       • The gap before this point was > 30 min
+ *       • Points are < 5 sec apart
+ *
+ *   Score = distance(expected, actual) / (SOG × 0.514 m/s × dt_sec).
+ *   Computed in SQL. COG (the little triangle inside each ring) is NOT
+ *   used for scoring — it is purely decorative, showing which way the
+ *   vessel was pointed at the moment of the fix.
+ *
+ *
+ *   Waypoint numbering (only visible in WP mode)
+ *   ─────────────────────────────────────────────
+ *
+ *   Waypoints are numbered 1, 2, 3 … N within the current visible time
+ *   window, per vessel. The first WP in the window is ALWAYS 1.
+ *
+ *       • Per vessel      — each vessel has its own sequence
  *       • Per time window — move the slider → numbers restart from 1
- *       • NOT per track   — there are no track splits in WP
- *       • NOT per day     — it's per visible window, which OFTEN
- *                           happens to equal one day
- *
- *   ── GAPS on wp-line ────────────────────────────────────────────────────
- *
- *       < 5 min   silent → solid wp-line
- *      5-10 min   silent → SHORT gap, grey, dense dashed
- *     10-20 min   silent → LONG  gap, light grey, sparse dashed
- *       > 20 min  silent → NO wp-line
- *
- *   ── PREDICTION colour (on wp-rings AND on the wp-line segment arriving
- *      at each WP) ───────────────────────────────────────────────────────
- *
- *     Boat doing 10 kn. In 30 s we expect it 154 m ahead. How far off?
- *       ≤ 23 m   → green   (right where we thought)
- *      23-51 m   → yellow  (a little off)
- *      51-77 m   → orange  (noticeably off)
- *      77 m+     → red     (far off / something weird)
- *
- *     → Automatically green when:
- *         • Stationary  (SOG < 0.5 kn)
- *         • First point of track
- *         • Previous gap was > 30 min
- *         • Points < 5 sec apart
- *
- *     Score = distance(expected, actual) / (SOG × 0.514 m/s × dt_sec)
- *     COG is NOT used. COG is purely visual (the arrow on each WP).
- *
- *   ── ENDPOINTS (FROM / TO markers) ─────────────────────────────────────
- *
- *     FROM = filtered[0]          (first WP in the visible range)
- *     TO   = filtered[length - 1] (last  WP in the visible range)
- *
- *     Every WP is a verified fix. The dashed line communicates any gap —
- *     the TO marker always stays on the actual last known position.
- *
- *   ── OUTLIER detection — bad GPS fixes / impossible position jumps.
- *      See the `OUTLIER` constant for thresholds.
+ *       • NOT per track, NOT per day
  *
  *
- * ─── 2. LINE LAYER (planned — not yet implemented) ───────────────────────────
+ *   Endpoints (FROM / TO markers)
+ *   ──────────────────────────────
  *
- * A separate visualisation drawn on top of the WP data. It uses vessel type
- * and harbour geofences to produce a line that is more readable than raw WPs.
- * 99% of viewers look at LINE first.
+ *       FROM = first waypoint in the visible time window
+ *       TO   = last  waypoint in the visible time window
  *
- *   ── COLOUR (same as WP) ───────────────────────────────────────────────
- *
- *     The LINE uses the SAME PREDICTION COLOURS as WP — green / yellow /
- *     orange / red, computed from the same score. See PREDICTION in the
- *     WP section above. One colour scheme across WP and LINE.
- *
- *   ── GAP DASH (same as WP) ─────────────────────────────────────────────
- *
- *     Same thresholds as the wp-line:
- *        < 5 min   silent → solid
- *       5-10 min   silent → SHORT gap, grey, dense dashed
- *      10-20 min   silent → LONG  gap, light grey, sparse dashed
- *        > 20 min  silent → may split (see VESSEL RULES below)
- *
- *   ── VESSEL RULES (new — only on LINE) ─────────────────────────────────
- *
- *     Fishing (30):          stops all day → keep line, never split
- *     Sailing / Pleasure     drifting is normal → keep line
- *       (36-37):
- *     Tug / pilot (50-59):   short sporadic jobs → keep line
- *     High-speed (40-49):    split on > 20 min silence
- *     Passenger / ferry      split on open-water silence,
- *       (60-69):             ignore harbour silence
- *     Cargo (70-79):         split on > 20 min silence
- *     Tanker (80-89):        split on > 20 min silence
- *
- *   ── HARBOUR RULE (overrides everything) ───────────────────────────────
- *
- *     Inside a known harbour / anchorage: silences are expected, keep the
- *     line, never split. (Implemented via GEOFENCES — future.)
+ *   Every waypoint is a verified fix — a gap before the last one is a
+ *   reporting-rate gap, not a data-quality issue. The dashed line already
+ *   communicates the gap; TO stays on the actual last known position.
  *
  *
- * ─── 3. D·P LAYER (future) ───────────────────────────────────────────────────
+ *   Outliers
+ *   ─────────
  *
- * Same principles as LINE, just fewer points for fast overview. Not now.
+ *   Sometimes a single GPS fix is clearly wrong — the vessel "teleports"
+ *   and comes back. We detect these by implied speed plus a context check,
+ *   and draw the skip segment differently. See OUTLIER.
  *
  *
- * ─── Constants & helpers in this file ───────────────────────────────────────
+ *   Planned but not implemented
+ *   ────────────────────────────
  *
- *   GAP               — wp-line silence thresholds
- *   PREDICTION        — prediction-score colour buckets
- *   LINE_STYLE        — visual weight of each wp-line segment type
- *   OUTLIER           — bad GPS fix detection
- *   ENDPOINTS         — FROM / TO marker placement
- *   VESSEL_TYPE_RULES — per-type rules for the future LINE layer
- *   GEOFENCE          — harbour / area rules (future)
- *   ROUTE_PATTERNS    — known repeated routes (future)
+ *   Today the LINE is "just connect the waypoints in order". The future
+ *   enhanced LINE will know the vessel type and which harbour it's in, and
+ *   apply smarter rules — see VESSEL_TYPE_RULES and GEOFENCES below.
+ *   Blocked on populating entities.domain_meta.ship_type for most vessels.
+ *
+ *   After that: D·P layer — a compressed version of LINE with fewer
+ *   points, same look, cheaper to render for long history.
+ *
+ *
+ *   Constants in this file
+ *   ───────────────────────
+ *
+ *       GAP               — 5 / 10 / 20 min silence thresholds
+ *       PREDICTION        — colour buckets
+ *       LINE_STYLE        — width, opacity, dash pattern per segment type
+ *       DIRECTION         — chevron placement
+ *       OUTLIER           — bad GPS fix detection
+ *       ENDPOINTS         — FROM / TO rule
+ *       VESSEL_TYPE_RULES — per-type rules for the future enhanced LINE
+ *       GEOFENCES         — harbour rules (future, not yet populated)
+ *       KNOWN_ROUTES      — repeated-route detection (future)
  */
 
 // ─── GAP (wp-line silence thresholds) ────────────────────────────────────────
@@ -146,8 +146,8 @@ export const GAP = {
    */
   LONG_SEC: 1200, // 20 min
 
-  SHORT_COLOR: "#6b7280", // grey        — SHORT gap (5-10 min, dense dashed)
-  LONG_COLOR:  "#9ca3af", // light grey  — LONG  gap (10-20 min, sparse dashed)
+  SHORT_COLOR: "#a3b1c2", // medium grey — SHORT gap (5-10 min, dense dashed)
+  LONG_COLOR:  "#c8d2de", // light grey  — LONG  gap (10-20 min, sparse dashed)
 };
 
 // ─── ENDPOINTS (FROM / TO markers) ──────────────────────────────────────────
@@ -212,10 +212,37 @@ export const PREDICTION = {
 
 export const LINE_STYLE = {
   normal:    { width: 1.5, opacity: 0.70, dash: null          as null },
-  gap:       { width: 2,   opacity: 0.70, dash: [0.5, 3]      as number[] }, // SHORT gap — dense dashed
-  gap_long:  { width: 1.5, opacity: 0.65, dash: [2, 8]        as number[] }, // LONG  gap — sparse dashed
+  gap:       { width: 2,   opacity: 0.90, dash: [1, 2.5]      as number[] }, // SHORT gap — dense dashed
+  gap_long:  { width: 1.75,opacity: 0.85, dash: [2.5, 5]      as number[] }, // LONG  gap — sparse dashed
   outlier:   { width: 2.0, opacity: 0.80, dash: [4, 3]        as number[] }, // bad GPS fix
   skip:      { width: 1.5, opacity: 0.75, dash: [5, 3]        as number[] }, // logical bypass
+};
+
+// ─── DIRECTION (chevrons on the line) ────────────────────────────────────────
+// See header for placement rule. Values below are what the code reads.
+
+export const DIRECTION = {
+  /** One chevron per this many metres of cumulative track distance.
+   *  Independent of AIS reporting rate — so cruising (long segments) and
+   *  harbour (many short segments) both get even chevron spacing. */
+  SPACING_M: 150,
+
+  /** Also fire a chevron whenever prediction_color changes — guarantees
+   *  every colour stretch has at least one direction indicator. */
+  FIRE_ON_COLOR_CHANGE: true,
+
+  /** Chevron canvas size (px, pre-retina). SDF scales cleanly. */
+  ICON_SIZE_PX: 28,
+
+  /** Stroke width as fraction of canvas size — sets chevron slimness. */
+  STROKE_FRACTION: 0.08,
+
+  /** icon-size (layout) interpolated by zoom. Zoom → multiplier. */
+  ICON_SIZE_BY_ZOOM: [
+    [11, 0.55],
+    [14, 0.85],
+    [18, 1.00],
+  ] as const,
 };
 
 // ─── VESSEL_TYPE_RULES (for the future LINE layer) ───────────────────────────

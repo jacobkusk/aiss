@@ -1,10 +1,25 @@
 # AISS — System Architecture Roadmap
 
-**Status:** Draft v0.2 — 2026-04-16
+**Status:** Draft v0.3 — 2026-04-17 (opdateret for 300k-vessel mål + dual-stack live/arkiv)
 **Scope:** Intern arkitektur for **aiss.network** (data protokol-produktet). waveo.blue og vier.blue er separate produkter med egne repos, egne databaser og egen fase-plan — de er consumers via API.
 **Principle:** `.aiss`-protokollen er kontrakten. Systemer kommunikerer via signerede packets og versionerede APIer — aldrig delte databaser, aldrig cross-DB joins.
 
 > **Kanoniske referencer:** `~/Ventures/shared/ARCHITECTURE.md` (tabelmodel), `shared/AISS-API-CONTRACT.md` (public API), `shared/AISS.md` (vision). Denne roadmap er aiss.network-specifik fasning og bindes til kanon — ikke en erstatning.
+>
+> **Specialiseret referencer (2026-04-17):**
+> - [`ARCHIVE-STRATEGY.md`](./ARCHIVE-STRATEGY.md) — WP/D·P/evidence-chain, D·P-timing, retention, signatur, sikker rå-sletning.
+> - [`LIVE-NETWORK.md`](./LIVE-NETWORK.md) — dual-stack live + arkiv, geohash pub/sub, plotter-protokoller, 5M-bruger fanout-matematik.
+> - [`AISSTREAM-READINESS.md`](./AISSTREAM-READINESS.md) — ingest-path for aisstream, faseplan 1-5, downsampling-strategi.
+> - [`FASE-0-TEST-PLAN.md`](./FASE-0-TEST-PLAN.md) — 7 checks i 7 døgn før aisstream åbnes.
+> - [`audits/2026-04-17-tracks-audit.md`](./audits/2026-04-17-tracks-audit.md) — baseline-audit der udløste Fase 0-redesign.
+
+## v0.3 ændringer (2026-04-17)
+
+Tre indsigter flyttede roadmappen:
+
+1. **Mål er 300.000 skibe**, ikke "nogle få tusind i Øresund". Det skift kræver at vi dimensionerer arkitekturen fra dag ét til downsampling + partitioner + direkte Postgres-path + geohash fanout — ikke som Fase 3-udvidelse.
+2. **aiss.network er både arkivformat OG live-netværk.** Ikke to systemer — samme data, tre aksess-mønstre (hot/warm/cold). Plottere, apps og abonnenter kan suge live, bidrage tilbage, og alle bidrag signeres til arkivet.
+3. **Fase 0 er dybere end antaget.** Nuværende `tracks`-tabel er "full rewrite" (én row per entity, overskrives). ARCHIVE-STRATEGY kræver append-only segmenter med signatur. Migration + nye RPC'er skal ske **før** aisstream overhovedet åbnes. Se audit-filen.
 
 ---
 
@@ -107,11 +122,24 @@ Vault-felter (`visibility`, `owner_id`, `retention`, `public_delay_hours`) er i 
 
 ## Fase 0 — Foundation (nu → 3 måneder)
 
-**Mål:** Lay protokollen, de fem kerne-systemer med rene grænser, og et data-model der kan bære vault fra dag ét.
+**Mål:** Lay protokollen, de fem kerne-systemer med rene grænser, et data-model der kan bære vault fra dag ét, **og en bevisbar arkiv-pipeline (WP → D·P → signatur → sikker sletning) før aisstream åbnes.**
 
-**Systems:** `ingest-gateway`, `ais-collect`, `core-api`, `aiss-ui-api`, `aiss.network`.
+**Systems:** `ingest-gateway`, `ais-collect`, `core-api`, `aiss-ui-api`, `aiss.network`, `track-builder` (rykket frem fra Fase 1).
 
-Konkrete ændringer fra i dag:
+### v0.3 addendum — arkiv-pipeline er Fase 0, ikke Fase 1
+
+Baseret på `audits/2026-04-17-tracks-audit.md`: nuværende `tracks` er full-rewrite. Før aisstream (som skaber 10× så mange entities på én dag) kan åbnes skal arkiv-pipelinen virke kontinuerligt i 7 døgn. Konkret:
+
+- **Migration:** `tracks` → append-only. Tilføj `algorithm_version`, `signature`, `signed_at`, `raw_merkle_root`, `time_range_start/end`, `source_ids[]`. Gamle 288 rows mærkes `legacy-full-rewrite-v0`.
+- **Ny RPC `build_segment_track(entity_id, time_start, time_end, algorithm_version, epsilon_m)`** — append-only segment. Kræver ≥10 WP + ≥1 km. Trigger: gap > 30 min, dagsskifte, manuel.
+- **Ny RPC `sign_track(track_id)`** — signerer over 7 felter med `pgcrypto`, key i `vault.secrets`. Companion `verify_track(track_id)`.
+- **Ny RPC `expire_raw_positions(dry_run, batch_size)`** — 5-betingelses-check før sletning (se `ARCHIVE-STRATEGY.md §3`).
+- **Ny pg_cron `dp-segment-builder`** — hvert 10. min kalder builder + signerer resultatet. Park gammel `compress-ais-segments` (lad rows bestå som legacy).
+- **Realtime subscription** på `entity_last` aktiveres og testes som forberedelse til live-netværk (se `LIVE-NETWORK.md §4`).
+
+Se `FASE-0-TEST-PLAN.md` for de 7 go/no-go checks der skal være grønne i 7 døgn før aisstream fase 1.
+
+### Øvrige Fase 0-ændringer
 
 - **`ingest-gateway` bliver til.** PI stopper med at kalde `ingest-positions` edge function direkte. Den pusher i stedet signerede `.aiss`-packets til gateway. Gateway validerer signatur, rate-limiter, forwarder til `core-api`'s write-RPC.
 - **`core-api` bliver formaliseret.** Nuværende edge functions (`ingest-positions`, `health`, `get_live_vessels*`, `get_vessel_track*`) grupperes bag stabilt RPC-interface. Bruger stadig Supabase underneath, men som implementation-detail, ikke som kontrakt.
@@ -119,7 +147,7 @@ Konkrete ændringer fra i dag:
 - **`aiss.network`-siten refaktoreres til tynd klient.** Supabase client fjernes fra browser-bundle. Alle kald går til `aiss-ui-api`.
 - **Data model konsolideres.** Eksisterende overlap (positions_v2 + strings + tracks osv.) rettes mod kanoniske 7 tabeller fra `shared/ARCHITECTURE.md`. Vault-felter tilføjes.
 
-**Exit-kriterier (udvidet med SERVICE-STANDARDS):**
+**Exit-kriterier (udvidet med SERVICE-STANDARDS + arkiv-pipeline):**
 
 1. `ingest-gateway` — top-level catch, per-reason counters, 4-lags observability, egen RUNBOOK.md.
 2. `ais-collect` — arver `PI-OPS.md` disciplin, pusher signerede `.aiss`, RUNBOOK.md opdateret.
@@ -128,6 +156,8 @@ Konkrete ændringer fra i dag:
 5. `aiss.network` — Supabase-klient fjernet fra client-bundle. Egen `/health`-side er lag 1 for hele stack'en.
 6. **Smoke test efter hver deploy** af hvert system via pg_net eller direct curl.
 7. Data migration kørt: ingen orphan-tabeller, vault-felter på plads, 7 kanoniske tabeller.
+8. **Arkiv-pipeline kører kontinuerligt i 7 døgn grønt** per `FASE-0-TEST-PLAN.md` før aisstream åbnes.
+9. **Realtime-lag verificeret** p50 < 300 ms, p99 < 1500 ms på `entity_last` — blocker for plotter-integration.
 
 ## Fase 1 — Pull background workers apart + aiss:full (3-12 måneder)
 

@@ -1,6 +1,29 @@
-CREATE OR REPLACE FUNCTION public.get_tracks_in_range(p_start timestamp with time zone, p_end timestamp with time zone)
+-- Returns raw positions within [p_start, p_end] (optionally bbox-filtered),
+-- joined with entity names + MMSI. Called from MomentVesselLayer2.tsx which
+-- pre-loads a ±window around the scrub-time and interpolates client-side.
+--
+-- bbox params are optional (all DEFAULT NULL). When all four non-null, the
+-- per-partition scan adds a lon/lat BETWEEN filter that hits the
+-- (lon, lat) btree index on each positions_v2_YYYYMMDD partition — keeps
+-- payload small when user zooms into e.g. Øresund.
+--
+-- SECURITY DEFINER because partitions have per-partition RLS policies and
+-- the anon role would otherwise need policies added on every new daily
+-- partition; definer-mode side-steps that entirely (read-only anyway).
+
+DROP FUNCTION IF EXISTS public.get_tracks_in_range(timestamp with time zone, timestamp with time zone);
+
+CREATE OR REPLACE FUNCTION public.get_tracks_in_range(
+  p_start   timestamp with time zone,
+  p_end     timestamp with time zone,
+  p_min_lon double precision DEFAULT NULL,
+  p_min_lat double precision DEFAULT NULL,
+  p_max_lon double precision DEFAULT NULL,
+  p_max_lat double precision DEFAULT NULL
+)
  RETURNS json
  LANGUAGE plpgsql
+ STABLE SECURITY DEFINER
  SET search_path TO 'public'
 AS $function$
 DECLARE
@@ -8,6 +31,7 @@ DECLARE
   v_sql TEXT;
   v_parts TEXT[];
   v_part TEXT;
+  v_bbox_clause TEXT := '';
 BEGIN
   -- Dynamically find partitions that exist for the requested date range
   SELECT array_agg(c.relname ORDER BY c.relname)
@@ -21,6 +45,15 @@ BEGIN
     RETURN json_build_object('points', '[]'::json);
   END IF;
 
+  -- Optional bbox filter — only applied if all four params are non-null.
+  IF p_min_lon IS NOT NULL AND p_min_lat IS NOT NULL
+     AND p_max_lon IS NOT NULL AND p_max_lat IS NOT NULL THEN
+    v_bbox_clause := format(
+      ' AND lon BETWEEN %s AND %s AND lat BETWEEN %s AND %s',
+      p_min_lon, p_max_lon, p_min_lat, p_max_lat
+    );
+  END IF;
+
   -- Build dynamic UNION ALL over all existing partitions
   v_sql := '';
   FOREACH v_part IN ARRAY v_parts LOOP
@@ -30,7 +63,7 @@ BEGIN
       v_part,
       extract(epoch from p_start),
       extract(epoch from p_end)
-    );
+    ) || v_bbox_clause;
   END LOOP;
 
   -- Main query: join positions with entities for names + mmsi
@@ -62,3 +95,8 @@ BEGIN
 END;
 $function$
 ;
+
+GRANT EXECUTE ON FUNCTION public.get_tracks_in_range(
+  timestamp with time zone, timestamp with time zone,
+  double precision, double precision, double precision, double precision
+) TO anon, authenticated;
